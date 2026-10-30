@@ -239,7 +239,7 @@ input[type=color]{width:34px;height:30px;border:0;background:transparent;padding
 <div class="toasts" id="toasts"></div>
 
 <div class="menu" id="menu">
-  <div style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 54 · real moons in the sky, flying birds</div>
+  <div style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 55 · Cookie the cockatiel</div>
   <div class="menu-inner">
     <h1 class="logo">Birdverse</h1>
     <p class="tagline">Build a star, grow planets, and help your flock farm, mine and build on them.</p>
@@ -2374,8 +2374,8 @@ const BIRDS = [
   {id:'puffy',   name:'Puffy',    species:'Flock member',         c:{body:'#c9cfe0',belly:'#eef0f8',head:'#d4d9ea',wing:'#a3abc4',beak:'#f2b04e'}, scale:1.15, speed:26, carry:8, lvl:4, cost:160, perk:'Extra fluffy. Slow but carries loads.'},
   {id:'lemon',   name:'Lemon',    species:'Flock member',         c:{body:'#ffe14d',belly:'#fff3a6',head:'#ffe14d',wing:'#e6c52a',beak:'#f29b4e'}, speed:34, carry:6, lvl:4, cost:180, perk:'Bright and cheerful.'},
   {id:'mercury', name:'Mercury',  species:'Young cockatiel',      c:{body:'#8e8e96',belly:'#b7b7bf',head:'#f5df6a',wing:'#6f6f78',beak:'#c9a99a',crest:'#f5df6a'}, crest:true, cheek:'#ff8a3d', scale:.85, speed:28, carry:4, lvl:5, cost:220, perk:'The newest member of the flock.'},
-  {id:'cookie',  name:'Cookie',   species:'Flock member',         c:{body:'#9a6a44',belly:'#d2a679',head:'#8a5d3b',wing:'#6e4a2e',beak:'#f2c14e'}, speed:32, carry:7, lvl:5, cost:240, perk:'With Mango in the flock, both carry +2.'},
-  {id:'mango',   name:'Mango',    species:'Peach-faced lovebird', c:{body:'#5cc85a',belly:'#9ae07a',head:'#ff9a7a',wing:'#3a9a42',beak:'#f0d0a0'}, speed:34, carry:6, lvl:6, cost:300, perk:'With Cookie in the flock, both carry +2.'},
+  {id:'cookie',  name:'Cookie',   species:'Lutino cockatiel',     c:{body:'#eef0f7',belly:'#fffbe6',head:'#fff07a',wing:'#e2e5ef',beak:'#dcc4c0',crest:'#ffe45c'}, crest:true, cheek:'#ff7a32', speed:52, carry:3, lvl:5, cost:240, perk:'As fast as Salman, but lazy: only carries 3.'},
+  {id:'mango',   name:'Mango',    species:'Peach-faced lovebird', c:{body:'#5cc85a',belly:'#9ae07a',head:'#ff9a7a',wing:'#3a9a42',beak:'#f0d0a0'}, speed:34, carry:6, lvl:6, cost:300, perk:'With Cookie in the flock, Mango carries +2 (Cookie is too lazy to help).'},
   {id:'lightning',name:'Lightning',species:'Flock member',        c:{body:'#2fb4ff',belly:'#fff36b',head:'#2fb4ff',wing:'#1677c9',beak:'#3a3a3a'}, speed:48, carry:5, lvl:6, cost:350, perk:'Almost the fastest wings in the galaxy.'},
   {id:'coco',    name:'Coco',     species:'Young rainbow lorikeet',c:{body:'#2fb04a',belly:'#ff8a1f',head:'#3157d6',wing:'#1f8f3a',beak:'#ff3b2f'}, scale:.9, speed:38, carry:6, lvl:7, cost:420, perk:'Colourful and quick.'},
   {id:'ighfif',  name:'Ighfif',   species:'Cyan-white lovebird',  c:{body:'#9fe7ea',belly:'#f2ffff',head:'#e8fbfc',wing:'#6ccfd4',beak:'#f0b07a'}, speed:36, carry:6, lvl:7, cost:450, perk:'Calm and careful.'},
@@ -2462,7 +2462,7 @@ function unlocksAt(l){
 function birdCarry(spec){
   let c = spec.carry;
   const ids = S.birds.map(b => b.id);
-  if ((spec.id==='cookie'||spec.id==='mango') && ids.includes('cookie') && ids.includes('mango')) c += 2;
+  if (spec.id==='mango' && ids.includes('cookie') && ids.includes('mango')) c += 2;
   return c;
 }
 const songBoost = () => 1 + S.birds.reduce((a,b) => a + (BIRD[b.id].song||0), 0);
