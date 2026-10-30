@@ -4579,7 +4579,7 @@ const Music=(()=>{
     for (let c=0;c<2;c++){ const d=b.getChannelData(c); let lp=0; for (let i=0;i<n;i++){ const t=i/n; lp+=(Math.random()*2-1-lp)*(.35-.28*t); d[i]=lp*Math.pow(1-t,2.6)*1.6; } } return b; }
   function init(){
     if (ctx) return; const AC=window.AudioContext||window.webkitAudioContext; if (!AC) return;
-    ctx=new AC();
+    ctx=new AC(); ctx.onstatechange=()=>label();
     const comp=ctx.createDynamicsCompressor(); comp.threshold.value=-18; comp.ratio.value=3; comp.connect(ctx.destination);
     master=ctx.createGain(); master.gain.value=0; master.connect(comp);
     mood=ctx.createBiquadFilter(); mood.type='lowpass'; mood.frequency.value=5000; mood.Q.value=.3; mood.connect(master);
@@ -4621,13 +4621,24 @@ const Music=(()=>{
       for (let i=0;i<4;i++) pluck(ch.p[seq[(Math.floor(rnd(0,3))+i)%seq.length]%ch.p.length]+12,t+i*.55,.05); nextPluck=t+rnd(7,12); }
     else if (space) nextPluck=Math.max(nextPluck,now+4);
   }
-  function start(){ if (!prefOn()) return; init(); if (!ctx) return; on=true; ctx.resume&&ctx.resume(); master.gain.cancelScheduledValues(ctx.currentTime); master.gain.setTargetAtTime(.5*vol,ctx.currentTime,2.5); if (!timer) timer=setInterval(tick,400); tick(); label(); }
+  let keep=null;
+  function silentWav(){ const n=4000, u=new Uint8Array(44+n), dv=new DataView(u.buffer), W=(o,t)=>{ for (let i=0;i<t.length;i++) u[o+i]=t.charCodeAt(i); };
+    W(0,'RIFF'); dv.setUint32(4,36+n,true); W(8,'WAVE'); W(12,'fmt '); dv.setUint32(16,16,true); dv.setUint16(20,1,true); dv.setUint16(22,1,true); dv.setUint32(24,8000,true); dv.setUint32(28,8000,true); dv.setUint16(32,1,true); dv.setUint16(34,8,true); W(36,'data'); dv.setUint32(40,n,true); u.fill(128,44); return URL.createObjectURL(new Blob([u],{type:'audio/wav'})); }
+  function unlock(){
+    try{ if (navigator.audioSession) navigator.audioSession.type='playback'; }catch(e){}   // iPad: play even with the silent switch on
+    try{ if (!keep){ keep=new Audio(silentWav()); keep.loop=true; keep.setAttribute('playsinline',''); } keep.play().catch(()=>{}); }catch(e){}
+    init(); if (!ctx) return;
+    try{ const b=ctx.createBuffer(1,1,22050), src=ctx.createBufferSource(); src.buffer=b; src.connect(ctx.destination); src.start(0); }catch(e){}
+    try{ const r=ctx.resume&&ctx.resume(); if (r&&r.then) r.then(label).catch(()=>{}); }catch(e){}
+  }
+  function start(){ if (!prefOn()) return; unlock(); if (!ctx) return; on=true; master.gain.cancelScheduledValues(ctx.currentTime); master.gain.setTargetAtTime(.95*vol,ctx.currentTime,2.5); if (!timer) timer=setInterval(tick,400); tick(); label(); }
   function stop(){ on=false; if (ctx){ master.gain.setTargetAtTime(0,ctx.currentTime,.6); setTimeout(()=>{ if (!on&&ctx&&ctx.state==='running') ctx.suspend(); },2500); } label(); }
-  function label(){ const b=document.getElementById('musicBtn'); if (b){ b.textContent=on?'Music: On':'Music: Off'; b.classList.toggle('go',on); } }
-  function toggle(){ if (on){ setPref(false); stop(); } else { setPref(true); start(); } }
+  function label(){ const b=document.getElementById('musicBtn'); if (b){ const live=on&&ctx&&ctx.state==='running'; b.textContent=!on?'Music: Off':live?'Music: On':'Music: tap'; b.classList.toggle('go',live); } }
+  function toggle(){ if (on && ctx && ctx.state!=='running'){ unlock(); return; } if (on){ setPref(false); stop(); } else { setPref(true); start(); } }
   document.addEventListener('visibilitychange',()=>{ if (!ctx||!on) return; if (document.hidden) ctx.suspend(); else ctx.resume(); });
-  const arm=()=>{ removeEventListener('pointerdown',arm); removeEventListener('keydown',arm); start(); };
-  addEventListener('pointerdown',arm); addEventListener('keydown',arm);
+  const EV=['touchstart','touchend','pointerup','click','keydown'];
+  const arm=()=>{ start(); if (ctx && ctx.state==='running') EV.forEach(e=>removeEventListener(e,arm,true)); };
+  EV.forEach(e=>addEventListener(e,arm,true));
   return {toggle,start,stop,get on(){return on;},get ctx(){return ctx;},label};
 })();
 const mb=document.getElementById('musicBtn'); if (mb){ mb.onclick=e=>{ e.stopPropagation(); Music.toggle(); }; try{ mb.textContent=localStorage.getItem('birdverse-music')==='0'?'Music: Off':'Music: On'; }catch(e){} }
