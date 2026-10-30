@@ -239,7 +239,7 @@ input[type=color]{width:34px;height:30px;border:0;background:transparent;padding
 <div class="toasts" id="toasts"></div>
 
 <div class="menu" id="menu">
-  <div style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 52 · more stars, planets, custom moons</div>
+  <div style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 53 · unique planet textures</div>
   <div class="menu-inner">
     <h1 class="logo">Birdverse</h1>
     <p class="tagline">Build a star, grow planets, and help your flock farm, mine and build on them.</p>
@@ -2498,27 +2498,35 @@ function sphereTexture(kind, hex, seed){
   const wantEm = kind==='lava'||kind==='crystal';
   let ecv, ectx, eimg;
   if (wantEm){ ecv=document.createElement('canvas'); ecv.width=W; ecv.height=H; ectx=ecv.getContext('2d'); eimg=ectx.createImageData(W,H); }
-  const fbm = makeNoise(seed), base = hexRgb(hex);
-  const white=[255,255,255], land=[79,157,74], sand=[201,177,122], dark=[43,29,26];
+  const fbm = makeNoise(seed), base0 = hexRgb(hex), vr=mulberry32(((seed||1)*9301+49297)|0);
+  // every world gets its own personality: continent size, how much land, tint, ice caps, bands and craters
+  const FQ=1.1+vr()*1.9, LAND=.44+vr()*.2, CAP=.84+vr()*.13, BANDS=6+vr()*14, BPH=vr()*6, TW=vr()*.18;
+  const tint=[vr()*255,vr()*255,vr()*255], base=mixc(base0,tint,TW);
+  const land=mixc([79,157,74],[[150,140,70],[60,120,60],[120,150,80],[90,110,70]][Math.floor(vr()*4)],vr()*.7), sand=[201,177,122], white=[255,255,255], dark=[43,29,26];
+  const craters=[]; for (let k=0;k<(kind==='rocky'||kind==='iron'||kind==='ice'?6+Math.floor(vr()*16):0);k++) craters.push({x:vr(),y:.15+vr()*.7,r:.015+Math.pow(vr(),2)*.07});
+  const spots=[]; if (kind==='gas') for (let k=0;k<1+Math.floor(vr()*3);k++) spots.push({x:vr(),y:.25+vr()*.5,r:.03+vr()*.05,c:mixc(base,[255,240,220],.5)});
   for (let j=0;j<H;j++){
     const lat=(j/(H-1)-.5)*Math.PI, cy=Math.sin(lat), cr=Math.cos(lat);
     for (let i=0;i<W;i++){
       const lon=i/W*Math.PI*2, x=cr*Math.cos(lon), z=cr*Math.sin(lon);
-      const n=fbm(x*1.8+3,cy*1.8+3,z*1.8+3), n2=fbm(x*5+9,cy*5+9,z*5+9,3);
+      const n=fbm(x*FQ+3,cy*FQ+3,z*FQ+3), n2=fbm(x*FQ*2.8+9,cy*FQ*2.8+9,z*FQ*2.8+9,3);
       let col, em=[0,0,0];
       switch(kind){
         case 'rocky': col=mulc(base,.55+n*.9); if (n2>.66) col=mulc(col,.7); break;
-        case 'ocean': if (n>.55) col=mixc(land,sand,Math.min(1,(n-.55)*5)); else col=mulc(base,.65+n*.6); if (Math.abs(cy)>.88) col=mixc(col,white,.85); break;
+        case 'ocean': if (n>LAND) col=mixc(land,sand,Math.min(1,(n-LAND)*5)); else col=mulc(base,.65+n*.6); if (Math.abs(cy)>CAP) col=mixc(col,white,.85); break;
         case 'ice': col=mixc(base,white,n*.8); if (Math.abs(n2-.5)<.02) col=mulc(base,.7); break;
         case 'desert': { const dn=Math.sin(x*6+n*5)*.5+.5; col=mixc(mulc(base,.72+n*.5),mixc(base,[255,232,175],.4),dn*.6); if (n2>.66) col=mulc(col,.78); break; }
-        case 'jungle': { if (n>.5) col=mixc([28,105,48],[78,152,62],Math.min(1,(n-.5)*4)); else col=mulc(base,.6+n*.7); if (Math.abs(cy)>.92) col=mixc(col,white,.7); break; }
+        case 'jungle': { if (n>LAND-.05) col=mixc([28,105,48],[78,152,62],Math.min(1,(n-.5)*4)); else col=mulc(base,.6+n*.7); if (Math.abs(cy)>.92) col=mixc(col,white,.7); break; }
         case 'iron': { col=mulc(base,.5+n*.85); if (Math.abs(n2-.5)<.015) col=mulc(col,.45); else if (n2>.7) col=mixc(col,[255,255,255],.14); break; }
-        case 'gas': case 'ringed': case 'storm': { const b=Math.sin(cy*11+n*5)*.5+.5; col=mixc(mulc(base,.72),mixc(base,white,.4),b); break; }
+        case 'gas': case 'ringed': case 'storm': { const b=Math.sin(cy*BANDS+n*5+BPH)*.5+.5; col=mixc(mulc(base,.72),mixc(base,white,.4),b); break; }
         case 'lava': { const k=1-smooth(0,.06,Math.abs(n-.5)); col=mixc(mulc(dark,.7+n2*.6),base,k); em=mulc(base,k); break; }
         case 'crystal': { const f=Math.floor(n*8)/8, v=Math.abs(n2-.5)<.03?1:0; col=mixc(mulc(base,.45+f*.9),white,v*.8); em=mixc(mulc(base,.3),white,v); break; }
         case 'star': col=mulc(mixc(base,white,.25),.8+n*.45+(n2>.7?-.15:0)); break;
         default: col=base;
       }
+      if (craters.length || spots.length){ const u=i/W, vv=j/(H-1);
+        for (const c of craters){ let dx=Math.abs(u-c.x); dx=Math.min(dx,1-dx)*2*cr; const dd=Math.hypot(dx,vv-c.y)/c.r; if (dd<1.15){ col=dd<.85?mulc(col,.78+dd*.12):mulc(col,1.12); } }
+        for (const sp of spots){ let dx=Math.abs(u-sp.x); dx=Math.min(dx,1-dx)*2; const dd=Math.hypot(dx*.6,vv-sp.y)/sp.r; if (dd<1) col=mixc(col,sp.c,(1-dd)*.8); } }
       const o=(j*W+i)*4;
       d[o]=Math.min(255,col[0]); d[o+1]=Math.min(255,col[1]); d[o+2]=Math.min(255,col[2]); d[o+3]=255;
       if (wantEm){ eimg.data[o]=em[0]; eimg.data[o+1]=em[1]; eimg.data[o+2]=em[2]; eimg.data[o+3]=255; }
@@ -2906,7 +2914,7 @@ function finishCooling(d){
   const goal=d.molten.goal, gcol=d.molten.color, z=zoneAt(d.starId, planetDist(d));
   let type=goal, hab=false, col=gcol;
   if (['islands','superearth','swamp','tundra'].includes(goal) && Math.random()<habChance(d)){ hab=true; }
-  else if (['rocky','ocean','ice'].includes(goal) && Math.random()<habChance(d)){ type='ocean'; hab=true; col=goal==='ocean'?gcol:'#2f7fd6'; }
+  else if (['rocky','ocean','ice'].includes(goal) && Math.random()<habChance(d)){ type='ocean'; hab=true; col=goal==='ocean'?gcol:PLANET_TYPES.ocean.sw[(d.seed||1)%6]; }
   else if (goal==='ocean'){ type = z==='cold'?'ice':'rocky'; col=PLANET_TYPES[type].sw[0]; }
   becomeType(d,type,hab,col);
   toast(hab ? `${d.name} cooled into a habitable world!` : `${d.name} cooled into a ${PLANET_TYPES[type].name} planet.`, hab);
@@ -3758,7 +3766,7 @@ function updateCivs(dt){
     if (!d.isMoon && !d.habitable && !d.molten && c.era>=6 && ['rocky','ocean','ice','crystal','desert','jungle','iron'].includes(d.type)){
       const before=d.terraform||0; d.terraform=Math.min(100,before+dt*spd*.3*(c.era-5));
       for (const mk of [25,50,75]) if (before<mk && d.terraform>=mk) toast(`The birds of ${d.name} are terraforming it: ${mk}%`);
-      if (d.terraform>=100){ c.dome=false; becomeType(d,'ocean',true,'#2f7fd6'); toast(`The birds terraformed ${d.name} into a green, living world!`, true); continue; }
+      if (d.terraform>=100){ c.dome=false; becomeType(d,'ocean',true,PLANET_TYPES.ocean.sw[(d.seed||1)%6]); toast(`The birds terraformed ${d.name} into a green, living world!`, true); continue; }
     }
     const g=.035*(1+.1*Math.min(10,food))*spd*pm.grow*(1-c.pollution/150);
     if (c.pop<cap) c.pop=Math.min(cap, c.pop+dt*(g*c.pop*(1-c.pop/cap)+.03*spd));
@@ -4279,7 +4287,7 @@ function produce(d, bld, screenPos){
     const gain=B.terra*(zoneAt(d.starId, planetDist(d))==='in'?2:1);
     d.terraform=Math.min(100,(d.terraform||0)+gain); addXP(3);
     if (screenPos) floater(screenPos.x, screenPos.y, `<span style="color:#7be495">Terraforming ${Math.floor(d.terraform)}%</span>`);
-    if (d.terraform>=100){ becomeType(d,'ocean',true,'#2f7fd6'); toast(`${d.name} is now a habitable world!`, true); }
+    if (d.terraform>=100){ becomeType(d,'ocean',true,PLANET_TYPES.ocean.sw[(d.seed||1)%6]); toast(`${d.name} is now a habitable world!`, true); }
     return;
   }
   let out=Object.assign({}, sb() && B.sbOut ? B.sbOut : B.out);
