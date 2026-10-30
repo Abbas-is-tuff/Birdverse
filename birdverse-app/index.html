@@ -199,6 +199,7 @@ input[type=color]{width:34px;height:30px;border:0;background:transparent;padding
     <button class="iconbtn" id="driftBtn" type="button" hidden>Continents</button>
     <button class="iconbtn" id="warpBtn" type="button">Time ×1</button>
     <button class="iconbtn" id="tipBtn" type="button">Hide tips</button>
+    <button class="iconbtn" id="musicBtn" type="button">Music: On</button>
     <button class="iconbtn" id="warBtn" type="button">War</button>
     <button class="iconbtn" id="lbBtn" type="button">Leaderboard</button>
     <button class="iconbtn" id="saveBtn" type="button">Save</button>
@@ -4563,5 +4564,73 @@ function boot(data){
 const hot = window.claude && window.claude.hot;
 if (hot && hot.snapshot) hot.snapshot(() => { save(); return {mode:S?S.mode:null, visit:visit?visit.id:null}; });
 if (hot && hot.ready) hot.ready(boot); else boot(hot && hot.data || {});
+
+/* ================= MUSIC: slow generative space ambience (Web Audio, no files) ================= */
+const Music=(()=>{
+  let ctx=null, master, mood, verb, echo, padBus, airG, on=false, timer=null, chordI=0, nextChord=0, nextBell=0, nextPluck=0, vol=.8;
+  const mtof=n=>440*Math.pow(2,(n-69)/12), rnd=(a,b)=>a+Math.random()*(b-a), pick=a=>a[Math.floor(Math.random()*a.length)];
+  // a drifting D-lydian world: each chord = bass note + pad voicing
+  const CHORDS=[ {b:38,p:[50,57,61,66,64]}, {b:43,p:[55,59,61,66,69]}, {b:47,p:[54,59,62,66,69]}, {b:45,p:[52,57,59,64,69]},
+                 {b:38,p:[50,57,62,66,69]}, {b:40,p:[55,59,62,66,71]}, {b:43,p:[55,62,66,69,74]}, {b:45,p:[52,57,61,64,69]} ];
+  const BELLS=[62,64,66,69,71,74,76,78,81,83,86];
+  function prefOn(){ try{ return localStorage.getItem('birdverse-music')!=='0'; }catch(e){ return true; } }
+  function setPref(v){ try{ localStorage.setItem('birdverse-music',v?'1':'0'); }catch(e){} }
+  function impulse(sec){ const n=Math.floor(ctx.sampleRate*sec), b=ctx.createBuffer(2,n,ctx.sampleRate);
+    for (let c=0;c<2;c++){ const d=b.getChannelData(c); let lp=0; for (let i=0;i<n;i++){ const t=i/n; lp+=(Math.random()*2-1-lp)*(.35-.28*t); d[i]=lp*Math.pow(1-t,2.6)*1.6; } } return b; }
+  function init(){
+    if (ctx) return; const AC=window.AudioContext||window.webkitAudioContext; if (!AC) return;
+    ctx=new AC();
+    const comp=ctx.createDynamicsCompressor(); comp.threshold.value=-18; comp.ratio.value=3; comp.connect(ctx.destination);
+    master=ctx.createGain(); master.gain.value=0; master.connect(comp);
+    mood=ctx.createBiquadFilter(); mood.type='lowpass'; mood.frequency.value=5000; mood.Q.value=.3; mood.connect(master);
+    verb=ctx.createConvolver(); verb.buffer=impulse(6); const vg=ctx.createGain(); vg.gain.value=.9; verb.connect(vg); vg.connect(mood);
+    echo=ctx.createDelay(2); echo.delayTime.value=.62; const fb=ctx.createGain(); fb.gain.value=.42; const ef=ctx.createBiquadFilter(); ef.type='lowpass'; ef.frequency.value=2200;
+    echo.connect(ef); ef.connect(fb); fb.connect(echo); const eg=ctx.createGain(); eg.gain.value=.5; ef.connect(eg); eg.connect(verb); eg.connect(mood);
+    padBus=ctx.createGain(); padBus.gain.value=.5; padBus.connect(mood); padBus.connect(verb);
+    // quiet cosmic air: filtered noise that slowly breathes
+    const nb=ctx.createBuffer(1,ctx.sampleRate*4,ctx.sampleRate), nd=nb.getChannelData(0); for (let i=0;i<nd.length;i++) nd[i]=Math.random()*2-1;
+    const ns=ctx.createBufferSource(); ns.buffer=nb; ns.loop=true; const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=500; bp.Q.value=.7;
+    airG=ctx.createGain(); airG.gain.value=.0; ns.connect(bp); bp.connect(airG); airG.connect(mood); ns.start();
+    const lfo=ctx.createOscillator(); lfo.frequency.value=.05; const lg=ctx.createGain(); lg.gain.value=300; lfo.connect(lg); lg.connect(bp.frequency); lfo.start();
+    nextChord=ctx.currentTime+.2; nextBell=ctx.currentTime+3; nextPluck=ctx.currentTime+6;
+  }
+  function pad(m,t,dur,v,tri){
+    const g=ctx.createGain(), f=ctx.createBiquadFilter(); f.type='lowpass'; f.Q.value=.5; f.frequency.setValueAtTime(rnd(500,800),t); f.frequency.linearRampToValueAtTime(rnd(1300,2000),t+dur*.55); f.frequency.linearRampToValueAtTime(600,t+dur+6);
+    [-8,0,7].forEach(cents=>{ const o=ctx.createOscillator(); o.type=tri?'triangle':'sawtooth'; o.frequency.value=mtof(m); o.detune.value=cents+rnd(-2,2); o.connect(f); o.start(t); o.stop(t+dur+7); });
+    f.connect(g); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(v,t+5); g.gain.setValueAtTime(v,t+dur); g.gain.linearRampToValueAtTime(0,t+dur+6); g.connect(padBus);
+  }
+  function sub(m,t,dur){ const o=ctx.createOscillator(), g=ctx.createGain(); o.type='sine'; o.frequency.value=mtof(m); o.connect(g); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(.16,t+4); g.gain.setValueAtTime(.16,t+dur); g.gain.linearRampToValueAtTime(0,t+dur+5); g.connect(master); o.start(t); o.stop(t+dur+6); }
+  function bell(m,t,v){
+    const g=ctx.createGain(), p=ctx.createStereoPanner?ctx.createStereoPanner():null; if (p) p.pan.value=rnd(-.7,.7);
+    [[1,1],[2.003,.25],[3.99,.08]].forEach(([r,a])=>{ const o=ctx.createOscillator(), og=ctx.createGain(); o.type='sine'; o.frequency.value=mtof(m)*r; og.gain.value=a; o.connect(og); og.connect(g); o.start(t); o.stop(t+7); });
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(v,t+.012); g.gain.exponentialRampToValueAtTime(.0001,t+rnd(4,6.5));
+    const out=p||g; if (p) g.connect(p); out.connect(echo); out.connect(verb); out.connect(mood);
+  }
+  function pluck(m,t,v){ const o=ctx.createOscillator(), g=ctx.createGain(), f=ctx.createBiquadFilter(); o.type='triangle'; o.frequency.value=mtof(m); f.type='lowpass'; f.frequency.setValueAtTime(2400,t); f.frequency.exponentialRampToValueAtTime(400,t+1.4);
+    g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(v,t+.02); g.gain.exponentialRampToValueAtTime(.0001,t+2.2); o.connect(f); f.connect(g); g.connect(echo); g.connect(verb); g.connect(mood); o.start(t); o.stop(t+2.4); }
+  function tick(){
+    if (!ctx||!on) return; const now=ctx.currentTime, space=(typeof view==='undefined')||view==='system';
+    mood.frequency.setTargetAtTime(space?6500:3600,now,3); airG.gain.setTargetAtTime(space?.05:.018,now,4);
+    if (now+3>nextChord){ const ch=CHORDS[chordI%CHORDS.length], t=Math.max(now+.1,nextChord), dur=rnd(15,19); chordI++;
+      sub(ch.b,t,dur); ch.p.forEach((m,i)=>pad(m,t+i*.35,dur,.075,i>2)); pad(ch.p[ch.p.length-1]+12,t+1.5,dur,.03,true);
+      nextChord=t+dur-2; }
+    while (nextBell<now+1.2){ const ch=CHORDS[(chordI-1+CHORDS.length)%CHORDS.length], t=Math.max(now+.05,nextBell);
+      if (Math.random()<.22){ const s=Math.floor(rnd(0,5)); for (let i=0;i<4;i++) bell(BELLS[s+i],t+i*.42,.05); nextBell=t+rnd(5,9); }
+      else { bell(pick(BELLS),t,rnd(.035,.07)); nextBell=t+(space?rnd(2,5.5):rnd(4,8)); } }
+    if (!space && nextPluck<now+1){ const ch=CHORDS[(chordI-1+CHORDS.length)%CHORDS.length], t=Math.max(now+.05,nextPluck), seq=[0,2,3,1,4,2];
+      for (let i=0;i<4;i++) pluck(ch.p[seq[(Math.floor(rnd(0,3))+i)%seq.length]%ch.p.length]+12,t+i*.55,.05); nextPluck=t+rnd(7,12); }
+    else if (space) nextPluck=Math.max(nextPluck,now+4);
+  }
+  function start(){ if (!prefOn()) return; init(); if (!ctx) return; on=true; ctx.resume&&ctx.resume(); master.gain.cancelScheduledValues(ctx.currentTime); master.gain.setTargetAtTime(.5*vol,ctx.currentTime,2.5); if (!timer) timer=setInterval(tick,400); tick(); label(); }
+  function stop(){ on=false; if (ctx){ master.gain.setTargetAtTime(0,ctx.currentTime,.6); setTimeout(()=>{ if (!on&&ctx&&ctx.state==='running') ctx.suspend(); },2500); } label(); }
+  function label(){ const b=document.getElementById('musicBtn'); if (b){ b.textContent=on?'Music: On':'Music: Off'; b.classList.toggle('go',on); } }
+  function toggle(){ if (on){ setPref(false); stop(); } else { setPref(true); start(); } }
+  document.addEventListener('visibilitychange',()=>{ if (!ctx||!on) return; if (document.hidden) ctx.suspend(); else ctx.resume(); });
+  const arm=()=>{ removeEventListener('pointerdown',arm); removeEventListener('keydown',arm); start(); };
+  addEventListener('pointerdown',arm); addEventListener('keydown',arm);
+  return {toggle,start,stop,get on(){return on;},get ctx(){return ctx;},label};
+})();
+const mb=document.getElementById('musicBtn'); if (mb){ mb.onclick=e=>{ e.stopPropagation(); Music.toggle(); }; try{ mb.textContent=localStorage.getItem('birdverse-music')==='0'?'Music: Off':'Music: On'; }catch(e){} }
+
 })();
 </script>
