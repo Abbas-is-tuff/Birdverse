@@ -239,7 +239,7 @@ input[type=color]{width:34px;height:30px;border:0;background:transparent;padding
 <div class="toasts" id="toasts"></div>
 
 <div class="menu" id="menu">
-  <div style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 55 · Cookie the cockatiel</div>
+  <div style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 56 · real pause</div>
   <div class="menu-inner">
     <h1 class="logo">Birdverse</h1>
     <p class="tagline">Build a star, grow planets, and help your flock farm, mine and build on them.</p>
@@ -5804,7 +5804,8 @@ function tick(now){
     last=now; requestAnimationFrame(tick); }
 }
 function tick0(now){
-  const rdt=Math.min(.1,(now-last)/1000), dt=rdt*simScale; last=now; time+=dt; if (S) updateCrash(rdt);
+  const rdt=Math.min(.1,(now-last)/1000), paused=!!S && WARPS[warpI]===0 && !crashSim, dt=paused?0:rdt*simScale; last=now; time+=dt; if (S) updateCrash(paused?0:rdt);
+  controls.autoRotate=spinOn && view==='planet' && !paused;   // pause freezes everything except your camera
   const sdt=dt*(crashSim?1:WARPS[warpI]), vdt=dt*Math.min(3,Math.max(1,crashSim?1:WARPS[warpI]));
   sourceObjs.asteroids.rotation.y+=dt*.03;
   sourceObjs.nebula.rotation.y+=dt*.01;
