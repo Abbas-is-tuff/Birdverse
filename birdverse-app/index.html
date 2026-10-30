@@ -238,7 +238,7 @@ input[type=color]{width:34px;height:30px;border:0;background:transparent;padding
 <div class="toasts" id="toasts"></div>
 
 <div class="menu" id="menu">
-  <div style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 50 · traffic</div>
+  <div style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 51 · temperature</div>
   <div class="menu-inner">
     <h1 class="logo">Birdverse</h1>
     <p class="tagline">Build a star, grow planets, and help your flock farm, mine and build on them.</p>
@@ -2795,6 +2795,23 @@ const planetGM = d => 833*Math.pow(planetRadius(d)/W,3);
 function habZone(st){ const z=HAB_ZONE[st.type]; if (!z) return null; const k=0.8+st.size*0.4; return [Math.round(z[0]*k), Math.round(z[1]*k)]; }
 function zoneAt(starId, r){ const st=S.stars.find(s=>s.id===starId), z=st&&habZone(st); if (!z) return 'none'; return r<z[0]?'hot':r>z[1]?'cold':'in'; }
 const planetDist = d => (d.px!==undefined ? Math.hypot(d.px,d.pz) : d.dist);
+/* ---- temperature: falls off with distance from the star; brighter stars warm wider orbits ---- */
+const STAR_HEAT={red:.55,orange:.75,yellow:1,white:1.1,green:1.05,blue:1.6,supergiant:1.9,violet:1.8,neutron:.3,hole:.15};
+function planetTemp(d){
+  const w=d.isMoon?parentOf(d):d; if (!w) return null; const st=S.stars.find(s=>s.id===w.starId); if (!st) return null;
+  const z=habZone(st), ref=z?(z[0]+z[1])/2:260*(STAR_HEAT[st.type]||.3), r=Math.max(20,planetDist(w));
+  let C=288*Math.pow(ref/r,.25)-273;
+  if (isGas(w.type)) C-=25;
+  if (d.molten) C=Math.max(C,1100-Math.min(1,d.molten.t/COOL_TIME())*900);
+  else if (d.type==='lava') C=Math.max(C,C+380);
+  if (!d.isMoon && d.civ) C+=(d.civ.pollution||0)*.12;   // smog traps heat
+  if (d.isMoon) C-=8;
+  return Math.round(C);
+}
+function tempWord(C){ return C>=300?'scorching':C>=60?'very hot':C>=35?'hot':C>=15?'warm':C>=0?'mild':C>=-25?'cold':C>=-80?'freezing':'deep frozen'; }
+function tempText(d){ const C=planetTemp(d); return C===null?'':`${C}°C, ${tempWord(C)}`; }
+// how much of the planet is frozen: 0 = no ice caps, 1 = a snowball world
+function frostOf(d){ const C=planetTemp(d); if (C===null || d.type==='lava' || d.molten) return 0; return Math.max(0,Math.min(1,(22-C)/100)); }
 const TERRESTRIAL = ['rocky','ocean','ice','lava','crystal','desert','jungle','iron'];
 const isGas = t => t==='gas'||t==='ringed'||t==='storm';
 const COOL_TIME = () => sb()?30:90;
@@ -4533,6 +4550,7 @@ function unitSphere(detail){
   return (sphereCache[detail]={unit:new Float32Array(verts), index:idx});
 }
 const ROCK_COL={moon:'#3a3940', ocean:'#77726b', rocky:'#6a6560', ice:'#9fb5c7', lava:'#151010', crystal:'#46387a'};
+const _SNOW=new THREE.Color('#eef4ff');
 function colorVerts(list){
   const d=visit.d, E=elevFn(d), g=visit.terrain.geometry, col=g.attributes.color, nor=g.attributes.normal, u=visit.unit, fine=visit.fine, T=PLANET_TYPES[d.type];
   const v=new V3(), rock=ROCK_COL[d.type]?new THREE.Color(ROCK_COL[d.type]):null;
@@ -4540,6 +4558,7 @@ function colorVerts(list){
     v.set(u[i*3],u[i*3+1],u[i*3+2]);
     const e=visit.driftH?visit.driftH[i]:E(v), j=fine(v.x*9+5,v.y*9+5,v.z*9+5,3);
     const c=terrainColor(d,e,v,j);
+    if (visit.frost>0 && (T.sea===null || e>T.sea+.004)){ const fr=visit.frost, lat=Math.abs(v.y), cap=1-fr*1.15+(j-.5)*.12, hi=e>.11-fr*.12; if (lat>cap || hi || fr>.92) c.lerp(_SNOW, Math.min(1,.7+fr*.3)); }
     if (rock && (T.sea===null || e>T.sea+.01)){
       const slope=1-(nor.getX(i)*v.x+nor.getY(i)*v.y+nor.getZ(i)*v.z);
       c.lerp(rock, smooth(.05,.18,slope)*.85);
@@ -4630,7 +4649,7 @@ function buildVisit(d){
   const terrain=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({vertexColors:true,roughness:.93,metalness:0}));
   terrain.castShadow=true; terrain.receiveShadow=true; ps.add(terrain);
   const vp=[]; makePickable(terrain,{kind:'ground'},vp);
-  visit={id:d.id,d,scene:ps,R,terrain,unit,fine:makeNoise((d.seed||1)+909),pickables:vp,bObjs:{},walkers:{},decor:[],moonPiv:null,digs:[],anim:[]};
+  visit={id:d.id,d,scene:ps,R,terrain,unit,fine:makeNoise((d.seed||1)+909),pickables:vp,bObjs:{},walkers:{},decor:[],moonPiv:null,digs:[],anim:[],frost:frostOf(d)};
   colorVerts();
   if (T.sea!==null){
     const sr=R*(1+T.sea); let seaMat; const seaM=new THREE.Mesh(new THREE.SphereGeometry(sr,128,80));
@@ -4643,6 +4662,9 @@ function buildVisit(d){
       seaMat=new THREE.MeshStandardMaterial({color:new THREE.Color(d.color).multiplyScalar(.7),roughness:.07,metalness:.15,transparent:true,opacity:.86,normalMap:nm,normalScale:new THREE.Vector2(.28,.28)});
       visit.anim.push(dt => { nm.offset.x+=dt*.006; nm.offset.y+=dt*.0025; }); }
     seaM.material=seaMat; seaM.receiveShadow=true; ps.add(seaM); visit.sea=seaM;
+    if (visit.frost>.05 && d.type!=='lava'){ const fr=visit.frost, ang=Math.min(Math.PI/2,Math.acos(Math.max(0,Math.min(1,1-fr*1.15)))), im=new THREE.MeshStandardMaterial({color:0xe6f1fb,roughness:.55,metalness:0});
+      if (fr>.92){ const ice=new THREE.Mesh(new THREE.SphereGeometry(sr*1.002,96,64),im); ice.receiveShadow=true; ps.add(ice); }
+      else [0,1].forEach(k => { const cap=new THREE.Mesh(new THREE.SphereGeometry(sr*1.002,96,24,0,Math.PI*2,0,ang),im); if (k) cap.rotation.x=Math.PI; cap.receiveShadow=true; ps.add(cap); }); }
     makePickable(seaM,{kind:'sea'},vp);
   }
   if (['ocean','rocky','ice'].includes(d.type)){
@@ -5484,7 +5506,7 @@ function renderPInfo(){
   const d=visit.d, T=PLANET_TYPES[d.type], counts={};
   d.buildings.forEach(b => counts[b.type]=(counts[b.type]||0)+1);
   const st=S.stars.find(s=>s.id===d.starId);
-  const par=d.isMoon?parentOf(d):null, stt=planetStatus(d), zz=d.isMoon?'':({in:'Inside the habitable zone.',hot:'Too close to its star for life.',cold:'Too far from its star for life.',none:'No habitable zone here.'}[zoneAt(d.starId,planetDist(d))]);
+  const par=d.isMoon?parentOf(d):null, stt=planetStatus(d), zz=(tempText(d)?`Temperature ${tempText(d)}. `:'')+(d.isMoon?'':({in:'Inside the habitable zone.',hot:'Too close to its star for life.',cold:'Too far from its star for life.',none:'No habitable zone here.'}[zoneAt(d.starId,planetDist(d))]));
   let h = `<h4>${esc(d.name)}</h4><div class="list"><div class="card"><div class="grow"><h5>${d.isMoon?'Moon':T.name+' planet'}${stt?' · '+stt:''}</h5><p>${zz}${d.habitable?' Birds here work 25% faster and farms grow 2 extra seeds.':''}${canTerraform(d)&&!d.molten?' Build a Terraformer to make it habitable.':''}</p><p>${par?'Moon of '+esc(par.name):'Orbits '+esc(st?st.name:'?')} · ${birdsOn(d.id).length}/${capacity(d)} birds · ${d.buildings.length}/${MAX_BUILDINGS} buildings</p><p>Bonus: +1 ${MATS[T.makes].name} on every job that makes it.${statueBoost(d)>1?` Statues: +${Math.round((statueBoost(d)-1)*100)}% work speed.`:''}</p></div></div>`;
   Object.keys(counts).forEach(k => { const B=BUILDINGS[k]; h += `<div class="card"><span class="dot" style="width:14px;height:14px;background:${B.color||'#8d93a8'}"></span><div class="grow"><h5>${B.name} × ${counts[k]}</h5><p>${B.out&&!B.terra?'Each job: '+outHTML(B):esc(B.desc)}</p></div></div>`; });
   if (d.civ){ const c=d.civ, cap=civCap(d), need=eraNeed(c.era), rates=civRates(d), nxt=ERAS[c.era+1];
@@ -5540,10 +5562,10 @@ function renderSel(){
   if (selected.kind==='star'){ d=S.stars.find(s=>s.id===selected.id); if (!d){ selected=null; bar.hidden=true; return; }
     const T=STAR_TYPES[d.type]; title=d.name; sub=`${T.name} · ${S.planets.filter(p=>p.starId===d.id).length} planets${sb()?'':' · +'+(T.income*(.7+d.size*.6)).toFixed(1)+' seeds/s'}`; }
   else if (selected.kind==='planet'){ d=S.planets.find(p=>p.id===selected.id); if (!d){ selected=null; bar.hidden=true; return; }
-    const stt=planetStatus(d); title=d.name; sub=`${PLANET_TYPES[d.type].name} planet${stt?' · '+stt:''} · ${birdsOn(d.id).length}/${capacity(d)} birds · ${d.buildings.length-1} buildings`;
+    const stt=planetStatus(d), tt=tempText(d); title=d.name; sub=`${PLANET_TYPES[d.type].name} planet${stt?' · '+stt:''}${tt?' · '+tt:''} · ${birdsOn(d.id).length}/${capacity(d)} birds · ${d.buildings.length-1} buildings`;
     extraBtn=`<button class="btn teal" type="button" id="selVisit">Visit</button><button class="btn" type="button" id="selMoon">+ Moon</button><button class="btn danger" type="button" id="selCrash">Crash</button>`; }
   else if (selected.kind==='moon'){ d=getWorld(selected.id); if (!d){ selected=null; bar.hidden=true; return; } const p=parentOf(d);
-    title=d.name; sub=`Moon of ${p?p.name:'?'} · ${birdsOn(d.id).length}/${capacity(d)} birds · ${d.buildings.length-1} buildings`; canDel=false;
+    title=d.name; sub=`Moon of ${p?p.name:'?'}${tempText(d)?' · '+tempText(d):''} · ${birdsOn(d.id).length}/${capacity(d)} birds · ${d.buildings.length-1} buildings`; canDel=false;
     extraBtn=`<button class="btn teal" type="button" id="selVisit">Land</button><button class="btn danger" type="button" id="selCrash">Crash</button>`; }
   else if (selected.kind==='building'){ if (!visit){ selected=null; bar.hidden=true; return; } d=visit.d.buildings.find(b=>b.id===selected.id); if (!d){ selected=null; bar.hidden=true; return; }
     const B=BUILDINGS[d.type], jobs=jobsFor(visit.d), workers=Object.keys(jobs).filter(k=>jobs[k].job&&jobs[k].job.id===d.id).map(k=>BIRD[k].name);
