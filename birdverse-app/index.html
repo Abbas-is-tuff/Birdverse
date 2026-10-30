@@ -1404,6 +1404,8 @@ const BUILDINGS = {
   spaceport: {name:'Spaceport',        civ:true, hidden:true, era:5, lvl:0, foot:3,   cost:{metal:80, rock:30, hydrogen:30}, rate:{hydrogen:.15}, color:'#ff5a4a', desc:'Launches rockets. Space companies need one.'},
   camp:      {name:'Army Camp',        civ:true, hidden:true, era:2, lvl:0, foot:2.2, cost:{rock:12, metal:3}, color:'#7a8a4a', desc:'Tents and a drill yard. Trains soldiers and makes the army stronger.'},
   airbase:   {name:'Air Base',         civ:true, hidden:true, era:5, lvl:0, foot:3.4, cost:{metal:60, rock:30, hydrogen:10}, color:'#8d96a8', desc:'A runway and hangars for fighter jets.'},
+  capital:   {name:'Capital City',     civ:true, hidden:true, era:1, lvl:0, foot:4.4, homes:30, cost:{rock:30, metal:6}, color:'#ffd166', desc:'The seat of a nation: a palace, towers and a grand square. Home for 30 birds.'},
+  city:      {name:'City',             civ:true, hidden:true, era:2, lvl:0, foot:3.6, homes:18, cost:{rock:20, metal:4}, color:'#d9c8a0', desc:'A walled town full of houses. Home for 18 birds.'},
   arcology:  {name:'Arcology',         civ:true, hidden:true, era:6, lvl:0, foot:2.4, homes:80, cost:{metal:80, stardust:40, ice:20}, color:'#bfe6ff', desc:'A glass city tower with gardens. Home for 80 birds.'},
   fusion:    {name:'Fusion Reactor',   civ:true, hidden:true, era:6, lvl:0, foot:2,   cost:{metal:70, stardust:50}, rate:{hydrogen:.5, stardust:.15}, color:'#7fdcff', desc:'Clean power from a tiny star.'},
   elevator:  {name:'Space Elevator',   civ:true, hidden:true, era:7, lvl:0, foot:1.6, cost:{metal:120, stardust:80}, rate:{stardust:.4}, color:'#e8eef4', desc:'A cable to orbit. Makes Stardust.'},
@@ -1417,7 +1419,7 @@ const ERAS=['Stone Age','Bronze Age','Iron Age','Medieval Age','Industrial Age',
 const eraNeed = e => e<6 ? 60*(e+1) : 300+15*(e-6);
 const ERA_POP=[0,12,30,55,90,140,140,140,140,140,140,140,140,140,140,140,140,140,140,140].concat(Array(10).fill(140));
 const ERA_HOME=['hut','mudhouse','woodhouse','stonehouse','brickhouse','skyscraper'].concat(Array(24).fill('arcology'));
-const ERA_SETS=[['hut','campfire','stones'],['mudhouse','field'],['woodhouse','forge','camp'],['stonehouse','windmill','tower','park'],['brickhouse','factory','watertower','drill','purifier'],['skyscraper','powerplant','turbine','robotlab','spaceport','airbase'],['arcology','fusion'],['elevator'],[],['megaring']];
+const ERA_SETS=[['hut','campfire','stones'],['mudhouse','field','capital'],['woodhouse','forge','camp','city'],['stonehouse','windmill','tower','park'],['brickhouse','factory','watertower','drill','purifier'],['skyscraper','powerplant','turbine','robotlab','spaceport','airbase'],['arcology','fusion'],['elevator'],[],['megaring']];
 const MAX_POP=200;
 
 const BIRDS = [
@@ -2131,10 +2133,18 @@ function arriveShip(sh){
   toast(`${sh.company} colonists landed on ${dst.name}! ${sh.nation.name} has a new colony.`, true); addXP(60);
   if (view==='system') renderPanel();
 }
-const shipObjs={};
+const shipObjs={}, _sd=new THREE.Vector3();
 function makeShipObj(){
-  const g=new THREE.Group(), mk=(col,sz) => { const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:col,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,fog:false})); sp.scale.set(sz,sz,1); g.add(sp); return sp; };
-  mk(0xffb347,70); const core=mk(0xffffff,26); return {g,core};
+  const g=new THREE.Group(), rk=new THREE.Group(); g.add(rk);
+  const mat=(c,o)=>new THREE.MeshStandardMaterial(Object.assign({color:new THREE.Color(c),roughness:.45,metalness:.3},o||{}));
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(4,4.6,24,12),mat('#f4f4fa')); rk.add(body);
+  const nose=new THREE.Mesh(new THREE.ConeGeometry(4,10,12),mat('#ff5a4a')); nose.position.y=17; rk.add(nose);
+  const win=new THREE.Mesh(new THREE.SphereGeometry(1.7,10,8),mat('#7fdcff',{emissive:new THREE.Color('#3fb8e0'),emissiveIntensity:.7})); win.position.set(0,5,3.8); rk.add(win);
+  for (let i=0;i<3;i++){ const f=new THREE.Mesh(new THREE.BoxGeometry(.9,9,6),mat('#ff5a4a')); const a=i*2.0944; f.position.set(Math.cos(a)*5.6,-9,Math.sin(a)*5.6); f.rotation.y=-a; rk.add(f); }
+  const flame=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0xffa040,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,fog:false})); flame.scale.set(20,34,1); flame.position.y=-19; rk.add(flame);
+  const core=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0xffffff,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,fog:false})); core.scale.set(10,16,1); core.position.y=-15; rk.add(core);
+  rk.scale.setScalar(.9);
+  return {g,rk,core,flame};
 }
 function removeShipObj(id){ const o=shipObjs[id]; if (!o) return; scene.remove(o.g); disposeTree(o.g); delete shipObjs[id]; }
 function clearShips(){ clearCrash(); Object.keys(shipObjs).forEach(removeShipObj); fxList.forEach(f => { scene.remove(f.g); disposeTree(f.g); }); fxList.length=0; }
@@ -2147,8 +2157,10 @@ function updateShips(dt){
     const A=worldPos(sh.from,_wa), B=worldPos(sh.to,_wb);
     if (!A||!B){ o.g.visible=false; continue; }
     o.g.visible=true; const k=sh.t/sh.dur, e=k*k*(3-2*k);
-    o.g.position.lerpVectors(A,B,e); o.g.position.y+=Math.sin(Math.PI*k)*A.distanceTo(B)*.12;
-    o.core.material.opacity=.75+.25*Math.sin(time*9);
+    o.g.position.lerpVectors(A,B,e);     o.g.position.y+=Math.sin(Math.PI*k)*A.distanceTo(B)*.12;
+    { const k2=Math.min(1,k+.02), e2=k2*k2*(3-2*k2); _sd.lerpVectors(A,B,e2); _sd.y+=Math.sin(Math.PI*k2)*A.distanceTo(B)*.12; _sd.sub(o.g.position);
+      if (_sd.lengthSq()>1e-8){ _sd.normalize(); o.rk.quaternion.setFromUnitVectors(UP,_sd); } }
+    o.core.material.opacity=.75+.25*Math.sin(time*9); o.flame.scale.set(18+Math.sin(time*13)*3,30+Math.sin(time*11)*6,1);
   }
   for (const id of Object.keys(shipObjs)) if (!S.ships.some(x=>x.id===id)) removeShipObj(id);
 }
@@ -2242,11 +2254,23 @@ function updateWars(d,dt,spd){
 }
 function annexNation(d,win,lose){
   const c=d.civ; if (!win||!lose||win===lose) return false;
+  (c.annexedList=c.annexedList||[]).push({n:lose, byId:win.id, share:lose.share, army:(lose.army||0)*.4});
   win.share+=lose.share; win.army=(win.army||0)+(lose.army||0)*.4; win.st=win.st||{w:0,l:0,k:0,c:0}; win.st.c++;
   c.nations=c.nations.filter(n=>n!==lose); c.wars=(c.wars||[]).filter(w=>w.a!==lose.id&&w.b!==lose.id);
   [win].forEach(n=>{ if (!c.wars.some(w=>w.a===n.id||w.b===n.id)){ n.morale=1; n.mob=1; } });
   c.annexed=(c.annexed||0)+1; c.natCap=Math.min(c.natCap===undefined?99:c.natCap,c.nations.length);   // permanent: this world will never found a replacement nation
   toast(`${win.name} annexed ${lose.name} on ${d.name}. It can never break away again.`, true); logWar(`${win.name} annexed ${lose.name} on ${d.name}.`);
+  if (visit && visit.id===d.id && visit.nationView) refreshNationView();
+  return true;
+}
+function unannexNation(d,idx){
+  const c=d.civ, rec=(c.annexedList||[])[idx]; if (!rec) return false;
+  const win=c.nations.find(n=>n.id===rec.byId)||c.nations[0], n=rec.n;
+  if (win){ win.share=Math.max(.3,win.share-rec.share); win.army=Math.max(5,(win.army||0)-rec.army); }
+  n.share=rec.share; n.army=Math.max(10,rec.army); n.morale=1; n.mob=1; n.st=n.st||{w:0,l:0,k:0,c:0};
+  c.nations.push(n); c.annexedList.splice(idx,1); c.annexed=Math.max(0,(c.annexed||1)-1);
+  if (c.annexedList.length) c.natCap=c.nations.length; else delete c.natCap;
+  toast(`${n.name} is free again on ${d.name}.`, true); logWar(`${n.name} regained its independence on ${d.name}.`);
   if (visit && visit.id===d.id && visit.nationView) refreshNationView();
   return true;
 }
@@ -2266,6 +2290,7 @@ function renderWarModal(){
     h+=`<div class="rowi" style="gap:6px;flex-wrap:wrap"><select class="warsel" id="wmA">${opts(warSel.a)}</select><span class="warr">attacks</span></div><div class="rowi" style="gap:6px;flex-wrap:wrap">${others.map(n=>`<button class="btn${warSel.t.includes(n.id)?' primary':''}" type="button" data-wmt="${n.id}">${esc(n.name)}</button>`).join('')}<button class="btn" type="button" id="wmAll">Everyone</button></div><div class="rowi" style="gap:6px;flex-wrap:wrap"><button class="btn danger" type="button" id="wmGo">Declare war on ${warSel.t.length} nation${warSel.t.length>1?'s':''}</button><button class="btn" type="button" id="wmAnnex">Annex ${warSel.t.length} nation${warSel.t.length>1?'s':''}</button></div>`; }
   else h+='<p class="sm" style="margin:0">This world needs a second nation before a war can start.</p>';
   h+=N.map(n=>{ const w=c.wars.find(x=>x.a===n.id||x.b===n.id); return `<div class="lbrow"><i style="background:${n.color}"></i><div class="grow"><p>${esc(n.name)} <small>${esc(WILD[n.race][4])}s${w?' · <span class="warr">at war</span>':''}</small></p><p class="sm">Army ${Math.round(n.army||0)} · Morale ${Math.round((n.morale??1)*100)}%</p></div><div class="rowi" style="gap:4px;flex-wrap:wrap;justify-content:flex-end"><button class="btn" type="button" data-wpow="${n.id}" data-d="-1">&minus;</button><span class="sm" style="min-width:58px;text-align:center">Power &times;${(n.boost||1).toFixed(2).replace(/\.?0+$/,'')}</span><button class="btn" type="button" data-wpow="${n.id}" data-d="1">+</button><button class="btn" type="button" data-wtroop="${n.id}">+20 troops</button><button class="btn" type="button" data-wmob="${n.id}">${(n.mob||1)>1?'Stand down':'Mobilize'}</button></div></div>`; }).join('');
+  (c.annexedList||[]).forEach((r,i)=>{ const by=N.find(n=>n.id===r.byId); h+=`<div class="lbrow"><i style="background:${r.n.color}"></i><div class="grow"><p>${esc(r.n.name)} <small>annexed${by?' by '+esc(by.name):''}</small></p></div><button class="btn" type="button" data-wmfree="${i}">Unannex</button></div>`; });
   c.wars.forEach(w=>{ const A=N.find(n=>n.id===w.a), B=N.find(n=>n.id===w.b); if (!A||!B) return; h+=`<div class="lbrow"><div class="grow"><p><span class="warr">${esc(A.name)}</span> vs <span class="warr">${esc(B.name)}</span></p><p class="sm">${Math.round(w.kills)} fallen${w.razed?' · '+w.razed+' buildings razed':''}</p></div><button class="btn" type="button" data-wmpeace="${w.id}">Make peace</button></div>`; });
   if (box.contains(document.activeElement) && document.activeElement.tagName==='SELECT') return;
   box.innerHTML=h;
@@ -2282,6 +2307,7 @@ function renderWarModal(){
   box.querySelectorAll('[data-wmob]').forEach(b=>b.onclick=()=>{ const n=N.find(x=>x.id===b.dataset.wmob); if (n){ n.mob=(n.mob||1)>1?1:1.8; toast(n.mob>1?`${n.name} mobilized for war.`:`${n.name} stood down.`); renderWarModal(); } });
   box.querySelectorAll('[data-wpow]').forEach(b=>b.onclick=()=>{ const n=N.find(x=>x.id===b.dataset.wpow); if (n){ const v=(n.boost||1)*(b.dataset.d==='1'?1.5:1/1.5); n.boost=Math.max(.2,Math.min(8,Math.round(v*100)/100)); if (Math.abs(n.boost-1)<.06) n.boost=1; renderWarModal(); } });
   box.querySelectorAll('[data-wtroop]').forEach(b=>b.onclick=()=>{ const n=N.find(x=>x.id===b.dataset.wtroop); if (n){ n.army=(n.army||0)+20; toast(`${n.name} gained 20 troops.`); renderWarModal(); } });
+  box.querySelectorAll('[data-wmfree]').forEach(b=>b.onclick=()=>{ if (unannexNation(d,+b.dataset.wmfree)){ save(); renderWarModal(); } });
   box.querySelectorAll('[data-wmpeace]').forEach(b=>b.onclick=()=>{ const w=c.wars.find(x=>x.id===b.dataset.wmpeace); if (w){ endWar(d,w,null,null); save(); renderWarModal(); } });
 }
 function renderLB(){
@@ -2531,6 +2557,10 @@ function refreshNationView(){
     const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthWrite:false})); sp.scale.set(R*.6,R*.15,1);
     sp.position.copy(dir).multiplyScalar(R*(1+Math.max(E(dir),sea===null?-1:sea))+R*.12); g.add(sp);
   }
+  for (const b of d.buildings){ if (b.type!=='capital' && b.type!=='city') continue; if (!b.name) b.name=cityName(d); const dir=dirOf(b), cv=document.createElement('canvas'); cv.width=384; cv.height=96; const x=cv.getContext('2d');
+    x.textAlign='center'; x.textBaseline='middle'; x.lineJoin='round'; x.lineWidth=9; x.strokeStyle='rgba(20,12,50,.92)'; x.font='bold 44px Trebuchet MS, Arial, sans-serif'; const tx=(b.type==='capital'?'\u2605 ':'')+b.name; x.strokeText(tx,192,48); x.fillStyle=b.type==='capital'?'#ffd166':'#ffffff'; x.fillText(tx,192,48);
+    const tex=new THREE.CanvasTexture(cv); tex.encoding=THREE.sRGBEncoding; const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,transparent:true,depthWrite:false})); sp.scale.set(R*.3,R*.075,1);
+    sp.position.copy(dir).multiplyScalar(R*(1+Math.max(E(dir),sea===null?-1:sea))+R*.07); g.add(sp); }
   visit.scene.add(g); visit.nationGroup=g;
   const tot=c.nations.reduce((a,n)=>a+n.share,0)||1;
   lg.innerHTML=`<b>Nations of ${esc(d.name)}</b>`+c.nations.map(n=>`<div class="row" data-nat="${n.id}" style="cursor:pointer"><i style="background:${n.color}"></i><span>${esc(n.name)} <small>${esc(WILD[n.race][4])}s · ${Math.round(c.pop*n.share/tot)}</small></span></div>`).join('');
@@ -2632,6 +2662,27 @@ function updateCivs(dt){
     for (const k in rates){ if (k==='seeds') S.seeds+=rates[k]*dt; else S.mats[k]+=rates[k]*dt; }
   }
 }
+const CITY_A=['Nest','Feather','Wing','Sky','Perch','Chirp','Tweet','Plume','Roost','Talon','Beak','Down','Seed','Cloud'], CITY_B=['ton','burg','ville','haven','gate','crest','ford','port','hollow','spire','rise','field'];
+function cityName(d){ const used=d.buildings.map(b=>b.name); for (let i=0;i<40;i++){ const nm=pickOne(CITY_A)+pickOne(CITY_B); if (!used.includes(nm)) return nm; } return pickOne(CITY_A)+pickOne(CITY_B)+' II'; }
+function tryBuildTown(d,here){
+  const c=d.civ, R=surfR(d); if (d.buildings.length>=MAX_BUILDINGS) return false;
+  const free=(dir,foot)=>isLand(d,dir) && !d.buildings.some(b=>angBetween(dir,dirOf(b))*R < BUILDINGS[b.type].foot+foot+.4);
+  const mk=(type,dir,n)=>{ const nb={id:uid(),type,dir:[+dir.x.toFixed(4),+dir.y.toFixed(4),+dir.z.toFixed(4)],civ:true,auto:true,name:cityName(d),nation:n.id}; d.buildings.push(nb); if (here) addBuildingObj(nb,true); return nb; };
+  const N=c.nations.slice().sort(()=>Math.random()-.5);
+  for (const n of N){
+    const nv=nationVec(n), mine=d.buildings.filter(b=>(b.type==='capital'||b.type==='city') && nationAt(d,dirOf(b))===n), cap=mine.find(b=>b.type==='capital');
+    if (!cap){
+      for (let k=0;k<40;k++){ const dir=jitterDir(nv,1+k*.9); if (free(dir,BUILDINGS.capital.foot)){ const nb=mk('capital',dir,n); toast(`${n.name} founded its capital, ${nb.name}!`); return true; } }
+      continue;
+    }
+    if (c.era>=2){
+      const cities=mine.length-1, want=Math.min(4,Math.floor(nationPop(d,n)/16));
+      if (cities<want){ const anchor=pickOne(mine);
+        for (let k=0;k<40;k++){ const dir=jitterDir(dirOf(anchor),9+Math.random()*(10+k)); if (free(dir,BUILDINGS.city.foot)){ const nb=mk('city',dir,n); toast(`${n.name} built a new city, ${nb.name}.`); return true; } } }
+    }
+  }
+  return false;
+}
 function findCivSpot(d, foot){
   const R=surfR(d), civ=civStructs(d), anchors=civ.length?civ:d.buildings;
   for (let i=0;i<25;i++){
@@ -2647,6 +2698,7 @@ function findCivSpot(d, foot){
 function civBuild(d){
   const c=d.civ, here=visit && visit.id===d.id;
   let type, upgrade=null;
+  if (c.era>=1 && c.nations && c.nations.length && Math.random()<.35 && tryBuildTown(d,here)) return;
   if (civHomes(d) < c.pop+8) type=ERA_HOME[c.era];
   else if (c.era>=4 && (c.pollution||0)>40 && Math.random()<(pmod(d).party==='green'?.8:.45)) type='purifier';
   else if (c.era>=2 && (c.wars||[]).length && Math.random()<.3 && d.buildings.filter(b=>b.type==='camp').length<6) type='camp';
@@ -2655,7 +2707,7 @@ function civBuild(d){
   else {
     const old=d.buildings.find(b => BUILDINGS[b.type].civ && BUILDINGS[b.type].homes && BUILDINGS[b.type].era < c.era);
     if (old && Math.random()<.5){ upgrade=old; type=ERA_HOME[c.era]; }
-    else { const e = Math.random()<.6 ? c.era : Math.floor(Math.random()*(c.era+1)); let set = e<ERA_SETS.length && ERA_SETS[e].length ? ERA_SETS[e] : [].concat(...ERA_SETS.slice(5,Math.min(e,ERA_SETS.length-1)+1)); type=set[Math.floor(Math.random()*set.length)]; }
+    else { const e = Math.random()<.6 ? c.era : Math.floor(Math.random()*(c.era+1)); let set = e<ERA_SETS.length && ERA_SETS[e].length ? ERA_SETS[e] : [].concat(...ERA_SETS.slice(5,Math.min(e,ERA_SETS.length-1)+1)); type=set[Math.floor(Math.random()*set.length)]; if (type==='capital'||type==='city') type=ERA_HOME[c.era]; }
   }
   if (upgrade){
     const dir=dirOf(upgrade), R=surfR(d), F=BUILDINGS[type].foot;
@@ -3139,6 +3191,20 @@ function makeBuilding(type, d, seed){
       const hub=new THREE.Group(); hub.position.set(0,6.1,.5); g.add(hub);
       for (let i=0;i<3;i++){ const arm=new THREE.Group(); arm.rotation.z=i*Math.PI*2/3; const bl=new THREE.Mesh(new THREE.BoxGeometry(.18,2.8,.05),M('#ffffff')); bl.position.y=1.4; arm.add(bl); hub.add(arm); }
       g.userData.ticks=[dt => { hub.rotation.z+=dt*1.8; }]; break; }
+    case 'capital': {
+      add(new THREE.CylinderGeometry(4.2,4.4,.14,24),M('#c9c2b0'),0,.07,0);
+      add(new THREE.BoxGeometry(2.6,1.6,2.2),M('#efe6cf'),0,.95,0);
+      add(new THREE.SphereGeometry(1.2,16,10,0,Math.PI*2,0,Math.PI/2),M('#ffd166',{metalness:.5,roughness:.35}),0,1.75,0);
+      add(new THREE.CylinderGeometry(.08,.08,1,6),M('#8a6a3a'),0,3.3,0); add(new THREE.BoxGeometry(.8,.45,.04),M('#d9302c'),.45,3.55,0);
+      [[-2.6,-2.6],[2.6,-2.6],[-2.6,2.6],[2.6,2.6]].forEach(([x,z]) => { add(new THREE.CylinderGeometry(.42,.5,2.4,8),M('#e0d6bd'),x,1.2,z); add(new THREE.ConeGeometry(.6,.9,8),M('#c0392b'),x,2.85,z); });
+      for (let i=0;i<8;i++){ const a=i/8*6.283+.4, rr=3.4; add(new THREE.BoxGeometry(.6,.5,.6),M('#d8c9a8'),Math.cos(a)*rr,.4,Math.sin(a)*rr); add(new THREE.ConeGeometry(.5,.4,4),M('#a8472f'),Math.cos(a)*rr,.85,Math.sin(a)*rr).rotation.y=Math.PI/4; }
+      break; }
+    case 'city': {
+      add(new THREE.CylinderGeometry(3.4,3.6,.12,20),M('#b9b3a4'),0,.06,0);
+      add(new THREE.TorusGeometry(3.2,.12,6,28),M('#9a9486'),0,.35,0).rotation.x=Math.PI/2;
+      for (let i=0;i<9;i++){ const a=r()*6.283, rr=.5+r()*2.3, h=.5+r()*1.4, w=.55+r()*.4; add(new THREE.BoxGeometry(w,h,w),M(['#e3d5b8','#d9c8a0','#c9b890','#eadfc6'][Math.floor(r()*4)]),Math.cos(a)*rr,h/2+.12,Math.sin(a)*rr); add(new THREE.ConeGeometry(w*.8,.45,4),M(['#b5472f','#9a4a2a','#c0583a'][Math.floor(r()*3)]),Math.cos(a)*rr,h+.35,Math.sin(a)*rr).rotation.y=Math.PI/4; }
+      add(new THREE.CylinderGeometry(.35,.4,2.8,8),M('#d9d0bb'),0,1.5,0); add(new THREE.ConeGeometry(.5,.8,8),M('#3a6fb0'),0,3.3,0);
+      break; }
     case 'camp': {
       add(new THREE.CylinderGeometry(1.9,1.9,.08,14),M('#8a7a50'),0,.04,0);
       [[-.9,.5,0],[.8,.7,.5],[.1,-1,-.3]].forEach(([x,z,ry],i) => { const t=add(new THREE.ConeGeometry(.75,1.3,4),M(i===1?'#c9b27a':'#a8c06a'),x,.7,z); t.rotation.y=Math.PI/4+ry; });
