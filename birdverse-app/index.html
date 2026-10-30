@@ -238,7 +238,7 @@ input[type=color]{width:34px;height:30px;border:0;background:transparent;padding
 <div class="toasts" id="toasts"></div>
 
 <div class="menu" id="menu">
-  <div style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 48 · smooth Ultra graphics</div>
+  <div style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 49 · oil and coal</div>
   <div class="menu-inner">
     <h1 class="logo">Birdverse</h1>
     <p class="tagline">Build a star, grow planets, and help your flock farm, mine and build on them.</p>
@@ -2247,6 +2247,8 @@ const MATS = {
   rock:    {name:'Rock',     short:'Rock', color:'#c69c72'},
   metal:   {name:'Metal',    short:'Metal',color:'#a9bccd'},
   ice:     {name:'Ice',      short:'Ice',  color:'#7fdcff'},
+  oil:     {name:'Oil',      short:'Oil',  color:'#e0a040'},
+  coal:    {name:'Coal',     short:'Coal', color:'#b3a79c'},
 };
 const MAT_KEYS = Object.keys(MATS);
 const SOURCES = [
@@ -2297,6 +2299,8 @@ const BUILDINGS = {
   well:   {name:'Ice Well',     lvl:3, foot:1.6, cost:{rock:10, metal:4},               seeds:25, xp:25, out:{ice:3}, color:'#7fdcff', desc:'Birds pull up Ice.'},
   pump:   {name:'Gas Pump',     lvl:4, foot:1.8, cost:{metal:12, rock:6},               seeds:40, xp:30, out:{hydrogen:4}, color:'#ff7eb6', desc:'Birds pump Hydrogen.'},
   statue: {name:'Bird Statue',  lvl:5, foot:1.4, cost:{rock:20, metal:10},              seeds:60, xp:40, color:'#ffc93c', desc:'Birds here work 10% faster (up to 3 statues).'},
+  coalpit:{name:'Coal Mine',    lvl:3, foot:2.2, needs:'coal', cost:{rock:10, metal:4},     seeds:30, xp:30, out:{coal:3}, color:'#5a524c', desc:'Build on a coal seam you found. Birds dig up Coal.'},
+  oilpump:{name:'Oil Derrick',  lvl:4, foot:2,   needs:'oil',  cost:{metal:16, rock:6},     seeds:45, xp:35, out:{oil:3},  color:'#2b2420', desc:'Build on an oil field you found. Birds pump up Oil.'},
   catcher:{name:'Star Catcher', lvl:6, foot:1.4, cost:{metal:20, ice:10, stardust:10},  seeds:80, xp:45, out:{stardust:3}, color:'#ffd166', desc:'Birds catch Stardust.'},
   hut:       {name:'Straw Hut',       civ:true, hidden:true, era:0, lvl:0, foot:1.3, homes:4,  cost:{rock:3}, color:'#c9a25a', desc:'A simple hut. Home for 4 birds.'},
   campfire:  {name:'Campfire',        civ:true, hidden:true, era:0, lvl:0, foot:1,   cost:{rock:2}, food:true, color:'#ff8a2a', desc:'Birds gather around the fire. Helps the village grow.'},
@@ -2318,6 +2322,9 @@ const BUILDINGS = {
   park:      {name:'Park',            civ:true, hidden:true, era:3, lvl:0, foot:1.8, cost:{rock:6, ice:4}, color:'#5cc85a', desc:'Trees and a fountain. Makes birds happier and cleans a little air.'},
   purifier:  {name:'Air Purifier',    civ:true, hidden:true, era:4, lvl:0, foot:1.4, machine:true, cost:{metal:25, ice:10}, color:'#7fdcff', desc:'A machine that pulls smog out of the air.'},
   spaceport: {name:'Spaceport',        civ:true, hidden:true, era:5, lvl:0, foot:3,   cost:{metal:80, rock:30, hydrogen:30}, rate:{hydrogen:.15}, color:'#ff5a4a', desc:'Launches rockets. Space companies need one.'},
+  coalmine:  {name:'Coal Mine',        civ:true, hidden:true, era:2, lvl:0, foot:2.2, cost:{rock:10, metal:2}, rate:{coal:.25}, color:'#5a524c', desc:'Miners dig Coal out of an old fossil seam.'},
+  derrick:   {name:'Oil Derrick',      civ:true, hidden:true, era:4, lvl:0, foot:2,   cost:{metal:16, rock:6}, rate:{oil:.3}, color:'#2b2420', desc:'A pumpjack nodding up and down, pulling Oil out of the ground.'},
+  oilrig:    {name:'Oil Rig',          civ:true, hidden:true, era:5, lvl:0, foot:2.6, cost:{metal:40, rock:10}, rate:{oil:.5}, color:'#e05a2a', desc:'An offshore platform pumping Oil from under the sea.'},
   camp:      {name:'Army Camp',        civ:true, hidden:true, era:2, lvl:0, foot:2.2, cost:{rock:12, metal:3}, color:'#7a8a4a', desc:'Tents and a drill yard. Trains soldiers and makes the army stronger.'},
   airbase:   {name:'Air Base',         civ:true, hidden:true, era:5, lvl:0, foot:3.4, cost:{metal:60, rock:30, hydrogen:10}, color:'#8d96a8', desc:'A runway and hangars for fighter jets.'},
   capital:   {name:'Capital City',     civ:true, hidden:true, era:1, lvl:0, foot:4.4, homes:30, cost:{rock:30, metal:6}, color:'#ffd166', desc:'The seat of a nation: a palace, towers and a grand square. Home for 30 birds.'},
@@ -2920,7 +2927,7 @@ const PARTIES={
   science: {name:'Bright Feather Party', color:'#6fb6ff', desc:'New ages come 60% faster.'},
   peace:   {name:'Calm Coo Party',       color:'#c58cff', desc:'Birds are much happier and protest less. Factories make 10% less.'},
 };
-const POLLUTERS={factory:.25, powerplant:.2, forge:.04, drill:.1, robotlab:.05};
+const POLLUTERS={factory:.25, powerplant:.2, forge:.04, drill:.1, robotlab:.05, coalmine:.14, derrick:.12, oilrig:.1};
 const CLEANERS={tree:.006, turbine:.04, purifier:.3, park:.03};
 const leaderTitle = era => era<2?'Chief':era===2?'Lord':era===3?'King':era===4?'Mayor':era===5?'President':era<9?'Chancellor':era<13?'High Admiral':era<17?'Sovereign':era<22?'Supreme Leader':'Eternal Emperor';
 function pmod(d){ const p=d.civ&&d.civ.leader?d.civ.leader.party:null;
@@ -3680,7 +3687,7 @@ function updateCivs(dt){
     if (c.pop<cap) c.pop=Math.min(cap, c.pop+dt*(g*c.pop*(1-c.pop/cap)+.03*spd));
     else c.pop=Math.max(cap, c.pop-(c.pop-cap)*.05*dt);
     if (c.era<ERAS.length-1){
-      const need=eraNeed(c.era); c.prog=Math.min(need, c.prog+dt*(1+c.pop*.05)*spd*pm.sci*(c.protest?.5:1));
+      const need=eraNeed(c.era); c.prog=Math.min(need, c.prog+dt*(1+c.pop*.05)*spd*pm.sci*(c.protest?.5:1)*(1+.06*Math.min(5,d.buildings.filter(b=>b.type==='coalmine'||b.type==='derrick'||b.type==='oilrig').length)));
       if (c.prog>=need && c.pop>=ERA_POP[c.era+1]){ c.era++; c.prog=0; toast(`${d.name} entered the ${ERAS[c.era]}!`, true); addXP(40*c.era); if (visit && visit.id===d.id) renderPanel(); }
     }
     c.t+=dt*spd;
@@ -3722,10 +3729,67 @@ function findCivSpot(d, foot){
   }
   return null;
 }
+/* ---- fossil fuels: hidden oil fields and coal seams left by ancient life ---- */
+const FOSSIL_TYPES={jungle:[4,3],ocean:[4,2],desert:[5,1],rocky:[2,3],ice:[1,1],iron:[1,4]};   // [oil fields, coal seams]
+const fosCache={};
+function fossils(d){
+  const T=!d.isMoon&&!d.molten&&FOSSIL_TYPES[d.type]; if (!T) return [];
+  const key=d.id+':'+d.type; if (fosCache[key]) return fosCache[key];
+  const r=mulberry32((d.seed||1)*7+313), out=[];
+  for (let k=0;k<T[0]+T[1];k++){ const kind=k<T[0]?'oil':'coal'; let dir=null;
+    for (let t=0;t<40;t++){ const v=randomDir(r); if (kind==='coal' && !isLand(d,v)) continue; dir=v; break; }
+    if (dir) out.push({i:k,kind,dir,sea:!isLand(d,dir)}); }
+  return fosCache[key]=out;
+}
+const fosFound=(d,f)=>(d.fosFound||[]).includes(f.i);
+function fossilNear(d,dir,kind,dist,onlyFound){ const R=surfR(d); let best=null, bd=1e9; for (const f of fossils(d)){ if (kind&&f.kind!==kind) continue; if (onlyFound!==undefined && fosFound(d,f)!==onlyFound) continue; const a=angBetween(dir,f.dir)*R; if (a<dist&&a<bd){ bd=a; best=f; } } return best; }
+function discoverFossil(d,f,who){
+  if (fosFound(d,f)) return false; (d.fosFound=d.fosFound||[]).push(f.i);
+  const what=f.kind==='oil'?(f.sea?'an offshore oil field':'oil'):'a coal seam';
+  toast(`${who} found ${what} on ${d.name}!`, true);
+  if (visit && visit.id===d.id){ fossilFx(f); refreshFossilMarkers(); }
+  return true;
+}
+function fossilBuilt(d,f){ const R=surfR(d); return d.buildings.some(b=>['coalmine','derrick','oilrig','coalpit','oilpump'].includes(b.type) && angBetween(dirOf(b),f.dir)*R<5); }
+function fossilStep(d,here){   // the wild birds prospect for fuel once their tech can use it, then build on what they find
+  const c=d.civ, R=surfR(d), usable=f => f.kind==='coal' ? c.era>=2 : f.sea ? c.era>=5 : c.era>=4;
+  const ready=fossils(d).filter(f=>fosFound(d,f) && usable(f) && !fossilBuilt(d,f));
+  if (ready.length){ const f=ready[0], type=f.kind==='coal'?'coalmine':f.sea?'oilrig':'derrick';
+    if (d.buildings.some(b=>angBetween(dirOf(b),f.dir)*R < BUILDINGS[b.type].foot+BUILDINGS[type].foot)) return false;
+    const nb={id:uid(),type,dir:[+f.dir.x.toFixed(4),+f.dir.y.toFixed(4),+f.dir.z.toFixed(4)],civ:true,auto:true}; d.buildings.push(nb);
+    if (here){ addBuildingObj(nb,true); refreshFossilMarkers(); } return true; }
+  const hidden=fossils(d).filter(f=>!fosFound(d,f) && usable(f));
+  if (hidden.length && Math.random()<.5){ const f=pickOne(hidden), n=nationAt(d,f.dir); discoverFossil(d,f, n?`The ${WILD[n.race][4]}s of ${n.name}`:'Wild birds'); return true; }
+  return false;
+}
+function refreshFossilMarkers(){
+  if (!visit) return; const d=visit.d;
+  (visit.fosObjs||[]).forEach(o=>{ visit.scene.remove(o); disposeTree(o); }); visit.fosObjs=[];
+  for (const f of fossils(d)){ if (!fosFound(d,f) || fossilBuilt(d,f)) continue;
+    const g=new THREE.Group();
+    if (f.kind==='oil'){ const pool=new THREE.Mesh(new THREE.CircleGeometry(1.5,20),new THREE.MeshStandardMaterial({color:0x0c0a08,roughness:.08,metalness:.4,polygonOffset:true,polygonOffsetFactor:-2})); pool.rotation.x=-Math.PI/2; pool.position.y=.06; pool.scale.set(1,.75,1); g.add(pool);
+      const post=new THREE.Mesh(new THREE.CylinderGeometry(.06,.06,1.4,6),M('#a0703f')); post.position.set(1.6,.7,0); g.add(post);
+      const sign=new THREE.Mesh(new THREE.BoxGeometry(.8,.45,.05),M('#e0a040')); sign.position.set(1.6,1.35,0); g.add(sign); }
+    else { for (let i=0;i<6;i++){ const m=new THREE.Mesh(new THREE.DodecahedronGeometry(.3+Math.random()*.3,0),M('#1c1a19',{roughness:.6,metalness:.2})); m.position.set((Math.random()-.5)*2.2,.2,(Math.random()-.5)*2.2); m.rotation.set(Math.random()*3,Math.random()*3,0); g.add(m); } }
+    shadowify(g); orientOnSurface(g,f.dir,groundR(d,f.dir)-.05,0); visit.scene.add(g); visit.fosObjs.push(g);
+  }
+}
+function fossilFx(f){   // an oil gusher or a puff of coal dust
+  if (!visit) return; const d=visit.d, base=f.dir.clone().multiplyScalar(groundR(d,f.dir)+.2), parts=[];
+  const mat=M(f.kind==='oil'?'#0c0a08':'#2a2725',{roughness:.15,metalness:.3});
+  for (let i=0;i<(f.kind==='oil'?60:24);i++){ const m=new THREE.Mesh(new THREE.SphereGeometry(.12+Math.random()*.16,6,5),mat); m.position.copy(base); visit.scene.add(m);
+    const sp=randomDir(Math.random).multiplyScalar(f.kind==='oil'?1.2:3); parts.push({m,v:f.dir.clone().multiplyScalar(f.kind==='oil'?9+Math.random()*7:3+Math.random()*3).add(sp),d:Math.random()*(f.kind==='oil'?2.5:.2)}); }
+  let t=0; visit.anim.push(dt => { if (t>6) return; t+=dt;
+    parts.forEach(p => { if (!p.m.parent) return; if (t<p.d){ p.m.visible=false; return; } p.m.visible=true; const up=p.m.position.clone().normalize(); p.v.addScaledVector(up,-14*dt); p.m.position.addScaledVector(p.v,dt);
+      if (p.m.position.length()<groundR(d,up)){ visit.scene.remove(p.m); p.m.geometry.dispose(); } });
+    if (t>6) parts.forEach(p=>{ if (p.m.parent){ visit.scene.remove(p.m); p.m.geometry.dispose(); } }); });
+  puffAt(f.dir,4,false);
+}
 function civBuild(d){
   const c=d.civ, here=visit && visit.id===d.id;
   let type, upgrade=null;
   if (c.era>=1 && c.nations && c.nations.length && Math.random()<.35 && tryBuildTown(d,here)) return;
+  if (c.era>=2 && Math.random()<.22 && fossilStep(d,here)) return;
   if (civHomes(d) < c.pop+8) type=ERA_HOME[c.era];
   else if (c.era>=4 && (c.pollution||0)>40 && Math.random()<(pmod(d).party==='green'?.8:.45)) type='purifier';
   else if (c.era>=2 && (c.wars||[]).length && Math.random()<.3 && d.buildings.filter(b=>b.type==='camp').length<6) type='camp';
@@ -4094,6 +4158,7 @@ function produce(d, bld, screenPos){
   if (out[mk]) out[mk]+=1;
   for (const k in out){ if (k==='seeds') S.seeds+=out[k]; else S.mats[k]+=out[k]; }
   addXP(2);
+  if ((bld.type==='mine'||bld.type==='well'||bld.type==='pump') && Math.random()<.06){ const f=fossilNear(d,dirOf(bld),null,40,false); if (f) discoverFossil(d,f,'Your birds'); }
   if (screenPos) floater(screenPos.x, screenPos.y, Object.keys(out).map(k => k==='seeds' ? `<span style="color:var(--seed)">+${out[k]} seeds</span>` : `<span style="color:${MATS[k].color}">+${out[k]} ${MATS[k].short}</span>`).join(' '));
 }
 
@@ -4205,6 +4270,31 @@ function makeBuilding(type, d, seed){
       [[-.6,-.6],[.6,-.6],[-.6,.6],[.6,.6]].forEach(([x,z]) => add(new THREE.BoxGeometry(.12,2.6,.12),M('#7d838f'),x,1.3,z));
       add(new THREE.CylinderGeometry(.95,.95,1.2,14),M('#c9ced8',{flatShading:false,metalness:.4,roughness:.4}),0,3.1,0); add(new THREE.ConeGeometry(1,.5,14),M('#9aa3b8'),0,3.95,0);
       break; }
+    case 'derrick': case 'oilpump': {   // pumpjack: the walking beam nods up and down
+      add(new THREE.BoxGeometry(2.6,.25,1.1),M('#4a4a52'),0,.12,0);
+      [[-.35],[.35]].forEach(([z]) => { const l=add(new THREE.BoxGeometry(.12,2.2,.12),M('#3a3f48'),.1,1.2,z); l.rotation.x=z>0?-.12:.12; });
+      const piv=new THREE.Group(); piv.position.set(.1,2.3,0); g.add(piv);
+      const beam=new THREE.Mesh(new THREE.BoxGeometry(2.8,.22,.22),M('#e0a040')); beam.position.x=.2; piv.add(beam);
+      const head=new THREE.Mesh(new THREE.CylinderGeometry(.55,.55,.3,12,1,false,-.6,1.9),M('#e0a040')); head.rotation.x=Math.PI/2; head.position.x=1.6; piv.add(head);
+      const rod=add(new THREE.CylinderGeometry(.04,.04,1.6,5),M('#9aa3b8',{metalness:.7}),1.75,1.1,0);
+      add(new THREE.BoxGeometry(.5,.6,.6),M('#3a3a42'),-1,.5,0); const cw=add(new THREE.BoxGeometry(.5,.25,.7),M('#2b2420'),-1.05,.9,0);
+      add(new THREE.CylinderGeometry(.25,.3,.4,8),M('#2b2420'),1.75,.3,0);
+      let tt=r()*6; g.userData.ticks=[dt => { tt+=dt*1.6; const a=Math.sin(tt)*.28; piv.rotation.z=a; rod.position.y=1.1+a*1.4; cw.rotation.z=Math.sin(tt)*.8; }]; break; }
+    case 'oilrig': {
+      [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([x,z]) => add(new THREE.CylinderGeometry(.14,.14,3,6),M('#d9d0c0'),x*.9,-.6,z*.9));
+      add(new THREE.BoxGeometry(2.8,.35,2.8),M('#e05a2a'),0,.9,0); add(new THREE.BoxGeometry(1,.8,1),M('#e8e8ee'),-.6,1.45,.6);
+      const tw=add(new THREE.CylinderGeometry(.12,.55,3.2,4),M('#e0b020',{wireframe:false}),.6,2.7,-.5); tw.rotation.y=Math.PI/4;
+      add(new THREE.CylinderGeometry(.05,.05,2.2,5),M('#9aa3b8'),1.3,2,1).rotation.z=-.4;
+      const fl=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0xff7a20,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false})); fl.position.set(1.75,3,1); fl.scale.set(.9,.9,1); g.add(fl);
+      let tt=0; g.userData.ticks=[dt => { tt+=dt; const k=.8+Math.sin(tt*13)*.15+Math.sin(tt*7)*.1; fl.scale.set(k,k*1.3,1); }]; break; }
+    case 'coalmine': case 'coalpit': {
+      const hill=add(new THREE.SphereGeometry(1.4,10,6,0,Math.PI*2,0,Math.PI/2),M('#6b5a48',{flatShading:true}),-.5,0,0); hill.scale.y=.8;
+      add(new THREE.BoxGeometry(.9,1,.3),M('#120f0d'),-.5,.45,1.2); add(new THREE.BoxGeometry(1.2,.15,.4),M('#a0703f'),-.5,1.05,1.25);
+      [-.45,.45].forEach(x => add(new THREE.BoxGeometry(.14,1,.14),M('#a0703f'),-.5+x,.5,1.3));
+      for (let i=0;i<7;i++) add(new THREE.DodecahedronGeometry(.22+r()*.18,0),M('#1c1a19',{metalness:.2,roughness:.5}),.9+(r()-.5)*.8,.2+r()*.3,.3+(r()-.5)*.9);
+      const cart=new THREE.Group(); g.add(cart); const cb=new THREE.Mesh(new THREE.BoxGeometry(.6,.35,.45),M('#8d8f99',{metalness:.5})); cb.position.y=.3; cart.add(cb);
+      const load=new THREE.Mesh(new THREE.DodecahedronGeometry(.22,0),M('#1c1a19')); load.position.y=.5; cart.add(load);
+      let tt=r()*6; g.userData.ticks=[dt => { tt+=dt*.6; const k=(Math.sin(tt)+1)/2; cart.position.set(-.5+k*1.4,0,1.5-k*.8); }]; break; }
     case 'drill': {
       [[-.7,-.7],[.7,-.7],[-.7,.7],[.7,.7]].forEach(([x,z]) => { const lg=add(new THREE.BoxGeometry(.15,3.4,.15),M('#e0b020'),x*.7,1.6,z*.7); lg.rotation.z=-x*.18; lg.rotation.x=z*.18; });
       add(new THREE.BoxGeometry(.8,.5,.8),M('#3a3a42'),0,3.3,0);
@@ -4534,7 +4624,7 @@ function buildVisit(d){
   d.buildings.forEach(b => addBuildingObj(b));
   makeVillagers(ps);
   syncWalkers();
-  visit.sunSet=null; buildCityLights();
+  visit.sunSet=null; buildCityLights(); refreshFossilMarkers();
 }
 function addBuildingObj(b, fresh){
   const d=visit.d, dir=dirOf(b), o=shadowify(makeBuilding(b.type,d,parseInt(b.id.slice(-5),36)||1));
@@ -4719,6 +4809,7 @@ function tryPlace(type, dir, sx, sy){
   if (!isLand(d,dir)){ toast(d.type==='lava'?"You can't build on lava.":"You can't build on water."); return; }
   if (B.civ){ if (!d.civ){ toast(d.isMoon?'Moons are too small for a civilization.':'Make this planet habitable first to start a civilization.'); return; } if (!sb() && B.era>d.civ.era){ toast(`The birds here need to reach the ${ERAS[B.era]} first.`); return; } }
   if (B.terra){ if (d.isMoon){ toast('Moons are too small to hold air. Terraform a planet instead.'); return; } if (d.habitable){ toast('This planet is already habitable.'); return; } if (!TERRESTRIAL.includes(d.type)){ toast("Gas giants can't be terraformed."); return; } if (d.molten){ toast('Wait for the planet to cool down first.'); return; } }
+  if (B.needs){ const f=fossilNear(d,dir,B.needs,4.5,true); if (!f){ toast(B.needs==='oil'?'There is no oil field here. Dig with the shovel or mine near it to find oil, then build on the black pool.':'There is no coal seam here. Dig with the shovel to find coal, then build on the black rocks.'); return; } dir=f.dir.clone(); }
   const clash=d.buildings.find(b => angBetween(dir,dirOf(b))*visit.R < BUILDINGS[b.type].foot+B.foot);
   if (clash){ toast(`Too close to the ${BUILDINGS[clash.type].name}.`); return; }
   const cost=buildingCost(type);
@@ -4835,6 +4926,7 @@ function finishDig(a){
   });
   if (SH.give) for (const k in SH.give) S.mats[k]+=SH.give[k];
   addXP(1);
+  { const f=fossilNear(d,a.dir,null,5,false); if (f && discoverFossil(d,f,'You')){ S.mats[f.kind]+=50; floater(a.sx,a.sy,`<span style="color:${MATS[f.kind].color}">${f.kind==='oil'?'Oil! +50':'Coal! +50'}</span>`); } }
   const nowLand=isLand(d,a.dir);
   if (!a.wasLand && nowLand) floater(a.sx,a.sy,'<span style="color:#9be07a">New land!</span>');
   else if (a.wasLand && !nowLand) floater(a.sx,a.sy,`<span style="color:${d.type==='lava'?'#ff8a3d':'#7fd1ff'}">${d.type==='lava'?'Lava!':'Water!'}</span>`);
@@ -5345,6 +5437,8 @@ function renderPInfo(){
     const crowd = c.pop>=cap-1 ? (civHomes(d)<=areaCap(d) ? 'Crowded: they need more homes.' : 'Crowded: the land is full.') : 'Growing.';
     h = h.replace('<div class="list">', `<div class="list"><div class="card" style="display:block"><h5>Civilization · <span class="era-tag">${ERAS[c.era]}</span></h5><p>Population ${Math.floor(c.pop)} / ${cap} (max ${MAX_POP}) · ${crowd}</p>${nxt?`<p>Next: ${nxt}${c.pop<ERA_POP[c.era+1]?` (needs ${ERA_POP[c.era+1]} birds)`:''}</p><div class="bar"><i style="width:${Math.min(100,c.prog/need*100)}%"></i></div>`:'<p>They reached the Modern Age!</p>'}<p style="margin-top:6px">Makes ${Object.keys(rates).map(k=>`${rates[k].toFixed(2)} ${k==='seeds'?'Seeds':MATS[k].name}`).join(', ')||'nothing yet'} per second.</p></div>${politicsCard(d)}${nationsCard(d)}`);
   }
+  { const F=fossils(d); if (F.length){ const fo=F.filter(f=>f.kind==='oil'&&fosFound(d,f)).length, fc=F.filter(f=>f.kind==='coal'&&fosFound(d,f)).length, hid=F.filter(f=>!fosFound(d,f)).length;
+    h += `<div class="card" style="display:block"><h5>Fossil fuels</h5><p>${fo} oil field${fo===1?'':'s'} and ${fc} coal seam${fc===1?'':'s'} found${hid?` · ${hid} still hidden underground`:' · all found'}. Dig with the shovel or let birds mine to find more. Build an Oil Derrick or Coal Mine on what you find.</p></div>`; } }
   h += `</div><p class="muted" style="font-size:12px">Tap a building on the planet to see it or demolish it.</p><button class="btn teal" type="button" id="leaveBtn">Back to space</button>`;
   body.innerHTML=h;
   $('#leaveBtn').onclick=()=>leavePlanet();
