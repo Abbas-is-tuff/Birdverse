@@ -198,6 +198,7 @@ input[type=color]{width:34px;height:30px;border:0;background:transparent;padding
     <button class="iconbtn" id="zoneBtn" type="button">Habitable zone</button>
     <button class="iconbtn" id="nationBtn" type="button" hidden>Nations</button>
     <button class="iconbtn" id="driftBtn" type="button" hidden>Continents</button>
+    <button class="iconbtn" id="spinBtn" type="button" hidden>Spin: On</button>
     <button class="iconbtn" id="warpBtn" type="button">Time ×1</button>
     <button class="iconbtn" id="tipBtn" type="button">Hide tips</button>
     <button class="iconbtn" id="musicBtn" type="button">Music: On</button>
@@ -3607,6 +3608,8 @@ function updatePlanetEconomy(dt){
     }
   }
 }
+let spinOn=true, spinSpeed=1.2; try{ spinOn=localStorage.getItem('birdverse-spin')!=='0'; }catch(e){}
+function syncSpin(){ controls.autoRotate=spinOn&&view==='planet'; controls.autoRotateSpeed=spinSpeed; const b=$('#spinBtn'); if (b){ b.textContent=spinOn?'Spin: On':'Spin: Off'; b.classList.toggle('go',spinOn); } }
 function visitPlanet(id){
   const d=getWorld(id); if (!d) return;
   ensurePad(d);
@@ -3620,7 +3623,7 @@ function visitPlanet(id){
   controls.target.set(0,0,0);
   camera.position.copy(pd.clone().multiplyScalar(R*1.6).add(new V3(0,R*.9,0)).normalize().multiplyScalar(R*2.6));
   tab='pbuild'; if (innerWidth<900) sheet.classList.add('closed');
-  $('#spaceBtn').hidden=false; $('#zoneBtn').hidden=true; $('#nationBtn').hidden=false; $('#driftBtn').hidden=false;
+  $('#spaceBtn').hidden=false; $('#zoneBtn').hidden=true; $('#nationBtn').hidden=false; $('#driftBtn').hidden=false; $('#spinBtn').hidden=false; syncSpin();
   renderTabs(); renderPanel(); renderHUD();
   toast(`Welcome to ${d.name}!`);
 }
@@ -3643,7 +3646,7 @@ function leavePlanet(silent){
   const id=visit.id; visit=null; view='system'; placing=null; selected=null;
   controls.minDistance=60; controls.maxDistance=150000;
   if (savedCam){ camera.position.copy(savedCam.pos); controls.target.copy(savedCam.tgt); }
-  $('#spaceBtn').hidden=true; $('#zoneBtn').hidden=false; $('#nationBtn').hidden=true; $('#driftBtn').hidden=true; $('#nationLegend').hidden=true; $('#driftBar').hidden=true;
+  $('#spaceBtn').hidden=true; $('#zoneBtn').hidden=false; $('#nationBtn').hidden=true; $('#driftBtn').hidden=true; $('#spinBtn').hidden=true; controls.autoRotate=false; $('#nationLegend').hidden=true; $('#driftBar').hidden=true;
   if (!silent){ tab='system'; renderTabs(); renderPanel(); renderHUD(); if (planetObjs[id]) select({kind:'planet',id}); else { const w=getWorld(id); if (w && w.isMoon) select({kind:'moon',id}); } }
 }
 function tryPlace(type, dir, sx, sy){
@@ -4569,6 +4572,7 @@ $('#driftDone').onclick=()=>exitDrift();
 $('#driftSlider').oninput=e=>{ if (visit&&visit.drift){ const k=e.target.value/1000; visit.drift.k=visit.drift.target=k; } };
 $('#resetNormal').onclick=()=>confirmBox('Delete your Normal save? Your level, seeds and planets will be lost.','Delete',()=>{ clearSave('normal'); menuInfo(); toast('Normal save deleted.'); });
 $('#resetSandbox').onclick=()=>confirmBox('Delete your Sandbox save?','Delete',()=>{ clearSave('sandbox'); menuInfo(); toast('Sandbox save deleted.'); });
+$('#spinBtn').onclick=()=>{ spinOn=!spinOn; try{localStorage.setItem('birdverse-spin',spinOn?'1':'0');}catch(e){} syncSpin(); };
 addEventListener('pagehide', save);
 document.addEventListener('visibilitychange', () => { if (document.hidden) save(); else { last=performance.now(); if (performance.now()-lastTick>500) requestAnimationFrame(tick); } });
 setInterval(()=>{ if (!document.hidden && lastTick && performance.now()-lastTick>1500){ last=performance.now(); requestAnimationFrame(tick); } },1000);
