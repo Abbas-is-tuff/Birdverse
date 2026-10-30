@@ -1882,7 +1882,7 @@ const canTerraform = d => !d.isMoon && TERRESTRIAL.includes(d.type) && !d.habita
 function initMoonOrbit(d, m, i){ const rm=moonDistI(d,i), a=i*2.4, v=Math.sqrt(planetGM(d)/rm); m.mx=Math.cos(a)*rm; m.mz=Math.sin(a)*rm; m.mvx=-Math.sin(a)*v; m.mvz=Math.cos(a)*v; }
 function addMoon(d){
   d.moons=d.moons||[]; const i=d.moons.length;
-  const m={id:i===0?'m'+d.id:'m'+d.id+'_'+i, type:'moon', isMoon:true, name:d.name+' Moon'+(i?' '+(i+1):''), size:d.size, color:'#b9b4c4', seed:(d.seed||1)+999+i*131, starId:d.starId, rings:false, moon:false};
+  const m={id:i===0?'m'+d.id:'m'+d.id+'_'+i, type:'moon', isMoon:true, name:d.name+' Moon'+(i?' '+(i+1):''), size:Math.min(d.size,1), color:'#b9b4c4', seed:(d.seed||1)+999+i*131, starId:d.starId, rings:false, moon:false};
   ensurePad(m); initMoonOrbit(d,m,i); d.moons.push(m); return m;
 }
 function ensureMoon(d){
@@ -4076,7 +4076,7 @@ function renderBuild(){
   if (design.kind==='star') h += `<p class="muted" style="margin:0;font-size:13px">${STAR_TYPES[design.type].desc} Each star starts a new star system far out in space.</p>`;
   else h += `<p class="muted" style="margin:0;font-size:13px">${TERRESTRIAL.includes(design.type)?'Starts as a molten lava world and cools down. ':''}Its buildings make extra ${matDot(PLANET_TYPES[design.type].makes)} ${MATS[PLANET_TYPES[design.type].makes].name}. Bigger planets have more room.</p><p class="muted" id="d-zone" style="margin:0;font-size:13px;color:#9be0b0"></p>`;
   h += `<div class="field"><label for="d-name">Name</label><div class="rowi"><input type="text" id="d-name" maxlength="24" value="${esc(design.name)}"><button class="btn" type="button" id="d-reroll">New name</button></div></div>`;
-  h += `<div class="field"><label for="d-size">Size</label><input type="range" id="d-size" min="0" max="1" step="0.01" value="${design.size}"></div>`;
+  h += `<div class="field"><label for="d-size">Size</label><input type="range" id="d-size" min="0" max="10" step="0.05" value="${design.size}"></div>`;
   if (design.kind==='planet'){
     const T=PLANET_TYPES[design.type];
     h += `<div class="field"><span class="lbl">Colour</span><div class="swatches">${T.sw.map(c=>`<button type="button" class="sw${design.color===c?' on':''}" data-sw="${c}" style="background:${c}" aria-label="Colour ${c}"></button>`).join('')}<input type="color" id="d-color" value="${design.color}" aria-label="Custom colour"></div></div>`;
