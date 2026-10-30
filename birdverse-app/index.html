@@ -238,7 +238,7 @@ input[type=color]{width:34px;height:30px;border:0;background:transparent;padding
 <div class="toasts" id="toasts"></div>
 
 <div class="menu" id="menu">
-  <div style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 47 · lava crashes, war events, Ultra graphics</div>
+  <div style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 48 · smooth Ultra graphics</div>
   <div class="menu-inner">
     <h1 class="logo">Birdverse</h1>
     <p class="tagline">Build a star, grow planets, and help your flock farm, mine and build on them.</p>
@@ -5512,7 +5512,7 @@ function initFx(){
   if (!THREE.EffectComposer || !THREE.UnrealBloomPass || !THREE.RenderPass || !THREE.ShaderPass || !THREE.CopyShader){ fxBroken=true; return; }
   try{
     const RT=(renderer.capabilities.isWebGL2 && THREE.WebGLMultisampleRenderTarget) ? THREE.WebGLMultisampleRenderTarget : THREE.WebGLRenderTarget;
-    const rt=new RT(4,4,{minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter,format:THREE.RGBAFormat}); rt.texture.encoding=THREE.sRGBEncoding;
+    const rt=new RT(4,4,{minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter,format:THREE.RGBAFormat,depthBuffer:true,stencilBuffer:true});   // stencil forces a 24-bit depth buffer: 16-bit made coastlines jagged rt.texture.encoding=THREE.sRGBEncoding;
     if (rt.samples!==undefined) rt.samples=4;
     composer=new THREE.EffectComposer(renderer,rt);
     rPass=new THREE.RenderPass(scene,camera); composer.addPass(rPass);
