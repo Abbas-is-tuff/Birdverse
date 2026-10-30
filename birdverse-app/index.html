@@ -239,7 +239,7 @@ input[type=color]{width:34px;height:30px;border:0;background:transparent;padding
 <div class="toasts" id="toasts"></div>
 
 <div class="menu" id="menu">
-  <div style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 53 · unique planet textures</div>
+  <div style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 54 · real moons in the sky, flying birds</div>
   <div class="menu-inner">
     <h1 class="logo">Birdverse</h1>
     <p class="tagline">Build a star, grow planets, and help your flock farm, mine and build on them.</p>
@@ -2765,6 +2765,20 @@ function orbitLine(dist, color, opacity){
   const pts=[]; for (let i=0;i<128;i++){ const a=i/128*Math.PI*2; pts.push(new V3(Math.cos(a)*dist,0,Math.sin(a)*dist)); }
   return new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({color,transparent:true,opacity}));
 }
+let _flockGeo=null; const sysFlocks=[], _kq=new THREE.Quaternion(), _kp=new V3(), _kn=new V3(), _km=new THREE.Matrix4(), _ks=new V3();
+function flockColors(w){ const N=(w.civ&&w.civ.nations)||[]; const out=[]; N.forEach(n => { const p=WILD[n.race]; if (p){ out.push(p[0],p[1]); } }); return out.length?out:['#5cc85a','#ffe03a','#4f9fe0']; }
+function makeFlock(radius, count, cols){   // tiny flapping birds circling a world, so you can see who lives there
+  if (!_flockGeo){ _flockGeo=new THREE.BufferGeometry(); _flockGeo.setAttribute('position',new THREE.Float32BufferAttribute([0,0,.35, -1,.25,-.1, 0,0,-.35,  0,0,.35, 0,0,-.35, 1,.25,-.1, 0,0,.5, -.12,0,-.4, .12,0,-.4],3)); _flockGeo.computeVertexNormals(); }
+  const im=new THREE.InstancedMesh(_flockGeo,new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide}),count); im.frustumCulled=false;
+  const B=[]; for (let i=0;i<count;i++){ const ax=randomDir(Math.random), st=randomDir(Math.random); st.sub(ax.clone().multiplyScalar(st.dot(ax))).normalize();
+    B.push({ax,st,ph:Math.random()*6.28,sp:(.25+Math.random()*.35)*(Math.random()<.5?-1:1),alt:1.06+Math.random()*.12,fl:7+Math.random()*5}); im.setColorAt(i,new THREE.Color(pickOne(cols))); }
+  const sz=Math.max(.04,radius*.035);
+  const upd=t => { for (let i=0;i<count;i++){ const b=B[i], a=b.ph+t*b.sp;
+      _kp.copy(b.st).applyAxisAngle(b.ax,a).multiplyScalar(radius*b.alt); _kn.copy(b.st).applyAxisAngle(b.ax,a+.05*Math.sign(b.sp)).multiplyScalar(radius*b.alt);
+      _km.lookAt(_kn,_kp,_kp.clone().normalize()); _kq.setFromRotationMatrix(_km); _ks.set(sz,sz*Math.sin(t*b.fl+i),sz); _km.compose(_kp,_kq,_ks); im.setMatrixAt(i,_km); }
+    im.instanceMatrix.needsUpdate=true; };
+  upd(0); return {im,upd};
+}
 function buildPlanetMesh(d, ghost){
   const r=planetRadius(d), g=new THREE.Group();
   const tex=sphereTexture(d.type,d.color,d.seed);
@@ -2789,6 +2803,8 @@ function buildPlanetMesh(d, ghost){
       const moon=new THREE.Mesh(new THREE.SphereGeometry(Math.max(.35,r*moonRF(mo)),20,14),mmat); moon.castShadow=true; moon.receiveShadow=true; moon.position.x=moonDistI(d,i); moon.position.z=i*3; moonPivot.add(moon); }
   }
   g.userData.mesh=mesh; g.userData.moonPivot=moonPivot; g.userData.r=r;
+  if (!ghost){ if (d.civ){ const f=makeFlock(r,Math.min(30,6+Math.floor(d.civ.pop/8)),flockColors(d)); g.add(f.im); sysFlocks.push(f); }
+    if (moonPivot && Array.isArray(d.moons)) d.moons.forEach((mo,i) => { const mm=moonPivot.children[i]; if (mm && mo.civ){ const f=makeFlock(Math.max(.35,r*moonRF(mo)),Math.min(20,4+Math.floor(mo.civ.pop/10)),flockColors(mo)); mm.add(f.im); sysFlocks.push(f); } }); }
   return g;
 }
 function addPlanetObj(d){
@@ -4741,18 +4757,24 @@ function buildVisit(d){
   }
   if (!d.isMoon){ const atm=atmosphereMesh(R*1.34, atmColor(d), sunDir.clone().multiplyScalar(1e5), d.type==='rocky'?.5:.85); ps.add(atm); visit.atm=atm; visit.atmBase=atm.material.uniforms.c.value.clone();
     const smog=new THREE.Mesh(new THREE.SphereGeometry(R*1.12,72,44),new THREE.MeshStandardMaterial({color:new THREE.Color('#8a7650'),transparent:true,opacity:0,depthWrite:false,roughness:1})); smog.visible=false; ps.add(smog); visit.smog=smog; }
-  else { const par=parentOf(d); if (par){ const pr=R*1.9, tex=sphereTexture(par.type,par.color,par.seed);
+  else { const par=parentOf(d); if (par){ const rf=moonRF(d), pr=Math.min(R*7,R/rf), tex=sphereTexture(par.type,par.color,par.seed), dr=Math.min(R*16,Math.max(pr*2.2+R, (d.mdist||Math.hypot(d.mx||0,d.mz||0)||planetRadius(par)*2.5)/Math.max(.35,planetRadius(par)*rf)*R));
       const pm=new THREE.Mesh(new THREE.SphereGeometry(pr,64,40),new THREE.MeshStandardMaterial({map:tex.map,roughness:.85}));
       if (tex.emissive){ pm.material.emissiveMap=tex.emissive; pm.material.emissive=new THREE.Color(0xffffff); }
-      pm.position.set(-R*4.6,R*1.7,-R*3.4); ps.add(pm);
+      pm.position.set(-.72,.27,-.53).normalize().multiplyScalar(dr); ps.add(pm);
       if (par.type!=='lava') pm.add(atmosphereMesh(pr*1.14, atmColor(par), sunDir.clone().multiplyScalar(1e5), .9));
+      if (par.civ){ const f=makeFlock(pr,Math.min(40,8+Math.floor(par.civ.pop/6)),flockColors(par)); pm.add(f.im); visit.anim.push(dt => f.upd(time)); }
       visit.anim.push(dt => { pm.rotation.y+=dt*.02; }); } }
   if (d.rings){ const rc=new THREE.Color(d.color).lerp(new THREE.Color('#ffffff'),.35);
     [[1.7,2.3,.5],[2.4,3.1,.3]].forEach(([a,b,o]) => { const ring=new THREE.Mesh(new THREE.RingGeometry(R*a,R*b,128),new THREE.MeshStandardMaterial({color:rc,side:THREE.DoubleSide,transparent:true,opacity:o,depthWrite:false})); ring.rotation.x=-Math.PI/2+.35; ps.add(ring); }); }
-  if (moonCount(d)){ const mp=new THREE.Group(), texs=[]; const nm=moonCount(d);
-    for (let i=0;i<nm;i++){ const k=i%4; if (!texs[k]) texs[k]=sphereTexture('rocky','#b9b4c4',(d.seed||1)+5+k*7).map;
-      const m=new THREE.Mesh(new THREE.SphereGeometry(R*Math.max(.09,.22-.012*i),40,28),new THREE.MeshStandardMaterial({map:texs[k],roughness:1})), a=i*2.4, rad=R*(4+.6*i);
-      m.position.set(Math.cos(a)*rad,R*(.6+.35*((i%3)-1)),Math.sin(a)*rad); mp.add(m); }
+  if (moonCount(d)){ const mp=new THREE.Group(), nm=moonCount(d), ML=Array.isArray(d.moons)?d.moons:[], pR=planetRadius(d);
+    for (let i=0;i<nm;i++){ const mo=ML[i]||{}, rf=moonRF(mo), mr=Math.max(R*.06,R*rf);
+      const tx=sphereTexture(mo.type&&mo.type!=='moon'?mo.type:'rocky', mo.color||'#b9b4c4', mo.seed||(i+3));
+      const mat=new THREE.MeshStandardMaterial({map:tx.map,roughness:1}); if (tx.emissive){ mat.emissiveMap=tx.emissive; mat.emissive=new THREE.Color(0xffffff); mat.emissiveIntensity=.8; }
+      const m=new THREE.Mesh(new THREE.SphereGeometry(mr,48,32),mat), md=mo.mdist||moonDistI(d,i), a=Math.atan2(mo.mz||Math.sin(i*2.4),mo.mx||Math.cos(i*2.4));
+      const rad=Math.max(R*1.6+mr*1.5, Math.min(R*18, md/pR*R));   // true distance, scaled like the planet
+      m.position.set(Math.cos(a)*rad,R*(.25*((i%3)-1)),Math.sin(a)*rad); mp.add(m);
+      if (mo.habitable || mo.civ){ m.add(atmosphereMesh(mr*1.16, atmColor(mo), sunDir.clone().multiplyScalar(1e5), .9)); }
+      if (mo.civ){ const f=makeFlock(mr,Math.min(36,6+Math.floor(mo.civ.pop/6)),flockColors(mo)); m.add(f.im); visit.anim.push(dt => f.upd(time)); } }
     ps.add(mp); visit.moonPiv=mp; }
   visit.baseKids=new Set(ps.children);
   // decor
@@ -5823,6 +5845,7 @@ function tick0(now){
     const a=time*.05; camera.position.set(Math.sin(a)*2200,900,Math.cos(a)*2200); controls.target.set(0,0,-300);
   }
   updateCamera(rdt);
+  for (let i=sysFlocks.length-1;i>=0;i--){ const f=sysFlocks[i]; if (!f.im.parent || !f.im.parent.parent){ sysFlocks.splice(i,1); continue; } if (view==='system') f.upd(time); }
   if (view==='planet' && visit && controls.autoRotate && !dragging) spinSun(-(2*Math.PI/3600*controls.autoRotateSpeed));
   if (view==='planet' && visit){ visit.lightT=(visit.lightT||0)-rdt; if (visit.lightT<=0){ visit.lightT=3; updateCityLights(); } }
   updateTags();
