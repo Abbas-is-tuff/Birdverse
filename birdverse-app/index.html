@@ -125,6 +125,7 @@ input[type=color]{width:34px;height:30px;border:0;background:transparent;padding
 .nlegend small{color:var(--muted);font-weight:600}
 .modal-box.lb{width:min(580px,100%);max-height:84vh;overflow-y:auto;user-select:text}
 .timedock{position:fixed;left:max(10px,env(safe-area-inset-left,0px));top:50%;transform:translateY(-50%);z-index:6;display:flex;flex-direction:column;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:6px}
+.timedock .grip{height:22px;border-radius:10px;background:rgba(255,255,255,.08);color:var(--muted,#9aa);font-size:16px;line-height:22px;text-align:center;letter-spacing:2px;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
 .timedock button{width:52px;height:46px;border-radius:12px;border:1px solid var(--line);background:transparent;color:var(--ink);font-weight:900;font-size:15px;touch-action:manipulation}
 .timedock button.on{background:var(--feather);border-color:var(--feather);color:#062b28}
 .warpfx{position:fixed;inset:0;z-index:3;pointer-events:none;opacity:0;transition:opacity .4s;background:radial-gradient(ellipse at center,transparent 55%,rgba(80,200,255,.28) 85%,rgba(150,90,255,.4) 100%)}
@@ -4532,9 +4533,17 @@ $('#saveBtn').onclick=openSaves;
 $('#zoneBtn').onclick=()=>{ S.showZone=!S.showZone; $('#zoneBtn').classList.toggle('go',!!S.showZone); updateZones(); toast(S.showZone?'Showing habitable zones in green.':'Habitable zones hidden.'); };
 $('#menuSaves').onclick=openSaves;
 $('#spaceBtn').onclick=()=>leavePlanet();
-function buildTimeDock(){ const dk=$('#timeDock'); dk.innerHTML=WARPS.map((w,i)=>`<button type="button" data-w="${i}">${w===0?'&#10074;&#10074;':w+'×'}</button>`).join('');
+function buildTimeDock(){ const dk=$('#timeDock'); dk.innerHTML='<div class="grip" id="dockGrip" title="Drag to move">&#8943;</div>'+WARPS.map((w,i)=>`<button type="button" data-w="${i}">${w===0?'&#10074;&#10074;':w+'×'}</button>`).join('');
   dk.querySelectorAll('button').forEach(b=>b.onclick=()=>{ warpI=+b.dataset.w; syncWarp(); });
-  dk.addEventListener('contextmenu',e=>e.preventDefault()); }
+  dk.addEventListener('contextmenu',e=>e.preventDefault());
+  const place=(x,y)=>{ const r=dk.getBoundingClientRect(); x=Math.max(4,Math.min(innerWidth-r.width-4,x)); y=Math.max(4,Math.min(innerHeight-r.height-4,y)); dk.style.left=x+'px'; dk.style.top=y+'px'; dk.style.transform='none'; return [x,y]; };
+  try{ const sv=JSON.parse(localStorage.getItem('birdverse-dock')||'null'); if (sv){ dk.style.display='flex'; place(sv[0],sv[1]); dk.style.display=S?'flex':'none'; } }catch(e){}
+  const gr=dk.querySelector('#dockGrip'); let off=null;
+  gr.addEventListener('pointerdown',e=>{ const r=dk.getBoundingClientRect(); off=[e.clientX-r.left,e.clientY-r.top]; try{gr.setPointerCapture(e.pointerId);}catch(_){} e.preventDefault(); e.stopPropagation(); });
+  gr.addEventListener('pointermove',e=>{ if (off) place(e.clientX-off[0],e.clientY-off[1]); });
+  const end=()=>{ if (!off) return; off=null; try{ const r=dk.getBoundingClientRect(); localStorage.setItem('birdverse-dock',JSON.stringify([r.left,r.top])); }catch(e){} };
+  gr.addEventListener('pointerup',end); gr.addEventListener('pointercancel',end);
+  addEventListener('resize',()=>{ if (dk.style.transform==='none'){ const r=dk.getBoundingClientRect(); place(r.left,r.top); } }); }
 function syncWarp(){ const w=WARPS[warpI]; { const pr=w>=10?1:Math.min(window.devicePixelRatio||1,2); if (renderer.getPixelRatio()!==pr){ renderer.setPixelRatio(pr); resize(); } } document.querySelectorAll('#timeDock button').forEach(b=>b.classList.toggle('on',+b.dataset.w===warpI)); $('#warpBtn').textContent = w===0 ? 'Paused' : 'Time ×'+w; $('#warpBtn').classList.toggle('go', w>1); $('#warpFx').classList.toggle('on', w>=10); }
 buildTimeDock(); syncWarp();
 $('#warpBtn').onclick=()=>{ warpI=(warpI+1)%WARPS.length; syncWarp(); toast(WARPS[warpI]===0?'Time is paused.':WARPS[warpI]===1?'Normal time.':`Time warp ×${WARPS[warpI]}`); };
