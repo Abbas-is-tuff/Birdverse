@@ -240,7 +240,7 @@ input[type=color]{width:34px;height:30px;border:0;background:transparent;padding
 <div class="toasts" id="toasts"></div>
 
 <div class="menu" id="menu">
-  <div style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 58 · no more squashed planets</div>
+  <div id="buildTag" style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 59 · update checker</div>
   <div class="menu-inner">
     <h1 class="logo">Birdverse</h1>
     <p class="tagline">Build a star, grow planets, and help your flock farm, mine and build on them.</p>
@@ -5824,6 +5824,22 @@ function fxWatch(rdt){   // if the device can't keep up, drop the glow pass inst
 function syncFxBtn(){ const b=document.getElementById('fxBtn'); if (b){ b.textContent=fxOn&&!fxBroken?'Graphics: Ultra':'Graphics: High'; b.classList.toggle('go',fxOn&&!fxBroken); } }
 function resize(){ const w=innerWidth, h=innerHeight; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); if (composer){ composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(w,h); } }
 addEventListener('resize', resize); resize();
+/* ---- update checker: the home-screen app and GitHub page keep an old copy, so look for a newer build and offer it ---- */
+const BUILD_NO=59;
+function checkUpdate(manual){
+  if (!/^https?:/.test(location.protocol) || /claude\.ai|claudeusercontent/.test(location.host)){ if (manual) toast('Updates come in automatically here. Close and reopen the game to get the newest one.'); return; }
+  const base=location.href.split('#')[0].split('?')[0];
+  fetch(base+'?nocache='+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.text():'').then(t => {
+    const m=/Build (\d+) ·/.exec(t||''), n=m?+m[1]:0;
+    if (n>BUILD_NO){ let bar=document.getElementById('updBar');
+      if (!bar){ bar=document.createElement('button'); bar.id='updBar'; bar.type='button'; bar.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:calc(90px + env(safe-area-inset-bottom,0px));z-index:50;padding:12px 18px;border-radius:14px;border:none;background:#ffc93c;color:#2a1a00;font-weight:900;font-size:16px;box-shadow:0 6px 20px rgba(0,0,0,.4)'; document.body.appendChild(bar); }
+      bar.textContent=`New update: Build ${n}. Tap to get it`; bar.onclick=()=>{ try{ save(); }catch(e){} location.replace(base+'?v='+n+'&t='+Date.now()); };
+    } else if (manual) toast(`You have the newest version (Build ${BUILD_NO}).`);
+  }).catch(()=>{ if (manual) toast('Could not check for updates. Are you online?'); });
+}
+setTimeout(()=>checkUpdate(false),4000); setInterval(()=>checkUpdate(false),5*60*1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkUpdate(false); });
+{ const bt=document.getElementById('buildTag'); if (bt){ bt.style.cursor='pointer'; bt.style.opacity='.85'; bt.textContent+=' · tap to check for updates'; bt.onclick=e=>{ e.stopPropagation(); checkUpdate(true); }; } }
 // iPad can change the window size while the game is in the background without telling us; re-check every frame so worlds never squash
 let _rsW=0, _rsH=0; function sizeWatch(){ const w=innerWidth, h=innerHeight; if (w!==_rsW || h!==_rsH || Math.abs(camera.aspect-w/h)>.001){ _rsW=w; _rsH=h; resize(); } }
 ['orientationchange','pageshow','focus'].forEach(e => addEventListener(e, () => { resize(); setTimeout(resize,300); setTimeout(resize,1000); }));
