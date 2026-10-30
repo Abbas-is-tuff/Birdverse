@@ -222,6 +222,7 @@ input[type=color]{width:34px;height:30px;border:0;background:transparent;padding
 <div class="warpfx" id="warpFx"></div>
 <div class="timedock" id="timeDock" aria-label="Time speed" style="display:none"></div>
 <div class="driftbar" id="crashBar" hidden><b id="crashTitle">Crash simulation</b><div class="drow"><button class="iconbtn" id="crashSkip" type="button">Skip</button></div></div>
+<div class="modal" id="moonModal" hidden><div class="modal-box lb"><div class="lbhead"><h3 style="margin:0" id="meTitle">Edit moon</h3><button class="lbx" id="meX" type="button" aria-label="Close">&times;</button></div><div id="meBody"></div></div></div>
 <div class="modal" id="warModal" hidden><div class="modal-box lb"><div class="lbhead"><h3 style="margin:0">War room</h3><button class="lbx" id="warX" type="button" aria-label="Close war room">&times;</button></div>
   <div id="warBody" style="display:grid;gap:8px"></div></div></div>
 <div class="modal" id="lbModal" hidden><div class="modal-box lb"><div class="lbhead"><h3 style="margin:0">Leaderboard</h3><button class="lbx" id="lbX" type="button" aria-label="Close leaderboard">&times;</button></div>
@@ -238,7 +239,7 @@ input[type=color]{width:34px;height:30px;border:0;background:transparent;padding
 <div class="toasts" id="toasts"></div>
 
 <div class="menu" id="menu">
-  <div style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 51 · temperature</div>
+  <div style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 52 · more stars, planets, custom moons</div>
   <div class="menu-inner">
     <h1 class="logo">Birdverse</h1>
     <p class="tagline">Build a star, grow planets, and help your flock farm, mine and build on them.</p>
@@ -2259,7 +2260,7 @@ const SOURCES = [
 const SRC = Object.fromEntries(SOURCES.map(s => [s.id, s]));
 const W = 10; // space scale
 const NEST_POS = new V3(0,260,0);
-const SLOT_MAX = 24;
+const SLOT_MAX = 48;
 function slotPos(i){ if (!i) return new V3(0,0,0); const r=7000*Math.sqrt(i), a=i*2.39996; return new V3(Math.cos(a)*r, ((i*37)%7-3)*120, Math.sin(a)*r); }
 const STAR_SLOT_LVLS = [1,4,6,8,10,12,14,16,18,20];
 const MAX_LEVEL = 20;
@@ -2274,6 +2275,14 @@ const STAR_TYPES = {
   supergiant:{name:'Red Supergiant',lvl:10,color:'#ff4a30',size:[16,24],cost:{hydrogen:450,stardust:220,metal:70}, seeds:900,  income:5,  xp:380, desc:'A colossal red star. Its light reaches very far.'},
   neutron:{name:'Neutron Star',lvl:11, color:'#9ff0ff', size:[1,2],   cost:{hydrogen:400,stardust:350,metal:120,ice:60}, seeds:1200, income:6, xp:500, desc:'A city-sized star spinning faster than a blender.'},
   violet:{name:'Violet Hypergiant',lvl:13,color:'#c58cff',size:[12,18],cost:{hydrogen:700,stardust:500,metal:200,ice:120}, seeds:2200, income:9, xp:800, desc:'The brightest star anyone has seen.'},
+  brown: {name:'Brown Dwarf', lvl:2,  color:'#b0603a', size:[2.5,4.5], cost:{hydrogen:30, stardust:10},            seeds:20,   income:.3, xp:50,  desc:'A failed star that barely glows. Its planets are cold.'},
+  pink:  {name:'Pink Star',   lvl:4,  color:'#ff8ad8', size:[4,8],   cost:{hydrogen:100,stardust:50},               seeds:120,  income:1.3,xp:130, desc:'A rare rose-coloured star.'},
+  teal:  {name:'Teal Star',   lvl:6,  color:'#4fe0d0', size:[5,9],   cost:{hydrogen:160,stardust:90, ice:20},       seeds:220,  income:2.1,xp:180, desc:'A cool-looking turquoise star.'},
+  golden:{name:'Golden Giant',lvl:8,  color:'#ffc23a', size:[10,15], cost:{hydrogen:280,stardust:140,metal:40},     seeds:550,  income:3.2,xp:280, desc:'A huge shining gold star.'},
+  redgiant:{name:'Red Giant', lvl:9,  color:'#ff6a3a', size:[13,19], cost:{hydrogen:320,stardust:160,metal:50},     seeds:700,  income:3.8,xp:320, desc:'An old star that swelled up as it aged.'},
+  wolf:  {name:'Wolf-Rayet Star',lvl:14,color:'#b8d4ff',size:[9,14], cost:{hydrogen:900,stardust:600,metal:250,ice:150}, seeds:2600, income:10, xp:900, desc:'A furious star blowing its outer layers into space.'},
+  magnetar:{name:'Magnetar',  lvl:15, color:'#d08cff', size:[1.5,2.5],cost:{hydrogen:1000,stardust:800,metal:300,ice:200}, seeds:3000, income:11, xp:1000, desc:'A tiny dead star with the strongest magnet in the universe.'},
+  quasar:{name:'Quasar Core', lvl:17, color:'#fff4c8', size:[6,10],  cost:{hydrogen:1500,stardust:1200,metal:500,ice:300}, seeds:4000, income:14, xp:1300, desc:'The blinding heart of a far-off galaxy.'},
   hole:  {name:'Black Hole',  lvl:12, color:'#ff9a3c', size:[4,7],  cost:{hydrogen:500,stardust:400,metal:150,ice:100}, seeds:1500, income:7, xp:600, desc:'Swallows light. Spins a glowing disk.'},
 };
 const PLANET_TYPES = {
@@ -2288,6 +2297,17 @@ const PLANET_TYPES = {
   jungle: {name:'Jungle',       lvl:5,  size:[1.6,3.4], cost:{ice:40, rock:25, stardust:10}, seeds:90,  makes:'ice',      xp:80,  amp:.5,  sea:-.02, sw:['#1f8f5a','#2fa86a','#3a8f3a','#1d7a6a','#4aa84a','#2a9a7a']},
   iron:   {name:'Iron',         lvl:6,  size:[1.2,2.8], cost:{rock:50, metal:60},              seeds:150, makes:'metal',    xp:100, amp:.4,  sea:null,  sw:['#8a8f99','#a0a4ad','#7a7f8a','#9a8a7a','#b0743c','#6f7480']},
   storm:  {name:'Storm Giant',  lvl:9,  size:[4,7],     cost:{hydrogen:200, stardust:60},      seeds:400, makes:'hydrogen', xp:170, amp:.1,  sea:null,  sw:['#7a6bd6','#5fa8d6','#b06cd6','#4fd0b0','#d66ca0','#6c8fd6']},
+  swamp:  {name:'Swamp',        lvl:4,  size:[1.5,3.2], cost:{ice:35, rock:20},               seeds:70,  makes:'ice',      xp:70,  amp:.35, sea:-.005, look:'jungle', sw:['#4f6b3a','#5a7a40','#3f5a34','#6b7a4a','#4a6a52','#5f6a3a']},
+  tundra: {name:'Tundra',       lvl:3,  size:[1.3,3],   cost:{ice:30, rock:15},               seeds:45,  makes:'ice',      xp:55,  amp:.4,  sea:-.03,  look:'ice',    sw:['#b9c8c0','#a8b8b0','#c8d4cc','#9fb0a8','#d0d8d0','#b0c0c8']},
+  volcanic:{name:'Volcanic',    lvl:8,  size:[1.4,3.2], cost:{rock:70, metal:50},             seeds:260, makes:'metal',    xp:130, amp:.6,  sea:null,  look:'lava',   sw:['#ff4a1a','#ff7a20','#e03a2a','#ff9a3a','#d02a1a','#ff5a40']},
+  canyon: {name:'Red Canyon',   lvl:4,  size:[1.3,3],   cost:{rock:45, metal:8},              seeds:40,  makes:'rock',     xp:55,  amp:.7,  sea:null,  look:'desert', sw:['#c4583a','#b0482a','#d06a40','#a84a30','#c86a4a','#9a3a28']},
+  toxic:  {name:'Toxic World',  lvl:7,  size:[1.6,3.4], cost:{hydrogen:80, rock:40},          seeds:200, makes:'hydrogen', xp:110, amp:.3,  sea:null,  look:'desert', sw:['#d8c84a','#c8b83a','#e0d060','#b8a830','#d0c070','#a8b040']},
+  diamond:{name:'Diamond World',lvl:12, size:[1.2,2.8], cost:{stardust:200, metal:80, ice:60},seeds:800, makes:'stardust', xp:260, amp:.55, sea:null,  look:'crystal',sw:['#e8f4ff','#c8e8ff','#f0f0ff','#d8f0f8','#ffffff','#b8d8f0']},
+  islands:{name:'Island World', lvl:5,  size:[1.6,3.6], cost:{ice:45, rock:15},               seeds:90,  makes:'ice',      xp:80,  amp:.45, sea:.07,   look:'ocean',  sw:['#1fa6c6','#2f8fd6','#1f86b0','#3a9ad6','#2aa0b8','#1d76a3']},
+  superearth:{name:'Super Earth',lvl:9, size:[3,5],     cost:{ice:120, rock:90, metal:30},    seeds:500, makes:'rock',     xp:200, amp:.5,  sea:0,     look:'ocean',  sw:['#2f7fd6','#2a6fc0','#3a8fe0','#2a9d8f','#3f7fc9','#1d6fa3']},
+  dwarf:  {name:'Dwarf Planet', lvl:2,  size:[.7,1.3],  cost:{rock:15, ice:5},                seeds:10,  makes:'ice',      xp:25,  amp:.5,  sea:null,  look:'moon',   sw:['#b9a89a','#a8a0b0','#c8b8a8','#9a9aa6','#d0c0b0','#a89080']},
+  icegiant:{name:'Ice Giant',   lvl:7,  size:[3,5.2],   cost:{hydrogen:140, ice:80},          seeds:260, makes:'ice',      xp:130, amp:.1,  sea:null,  look:'gas', gas:true, sw:['#7fd4e8','#5fb8e0','#8fe0f0','#4fa0d0','#a0e8f0','#6fc8d8']},
+  hotjupiter:{name:'Hot Jupiter',lvl:10,size:[4,6.5],   cost:{hydrogen:260, stardust:80},     seeds:450, makes:'hydrogen', xp:190, amp:.1,  sea:null,  look:'gas', gas:true, sw:['#ff8a3a','#e0602a','#ffa05a','#d04a2a','#ff7040','#c85a30']},
   moon:   {name:'Moon',        lvl:999,hidden:true, size:[.5,.5], cost:{}, seeds:0, makes:'metal', xp:0, amp:.4, sea:null, sw:['#b9b4c4']},
 };
 const BUILDINGS = {
@@ -2471,6 +2491,7 @@ const mulc = (a,k) => [a[0]*k,a[1]*k,a[2]*k];
 const smooth = (e0,e1,x) => { const t=Math.max(0,Math.min(1,(x-e0)/(e1-e0))); return t*t*(3-2*t); };
 
 function sphereTexture(kind, hex, seed){
+  kind=(PLANET_TYPES[kind]&&PLANET_TYPES[kind].look)||kind; if (kind==='moon') kind='rocky';
   const W=256, H=128;
   const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
   const ctx=cv.getContext('2d'), img=ctx.createImageData(W,H), d=img.data;
@@ -2694,7 +2715,9 @@ const starObjs = {}, planetObjs = {};
 const starRadius = d => W*lerp(STAR_TYPES[d.type].size[0], STAR_TYPES[d.type].size[1], d.size);
 const planetRadius = d => (d.molten&&d.molten.r) ? d.molten.r : W*lerp(PLANET_TYPES[d.type].size[0], PLANET_TYPES[d.type].size[1], d.size);
 const moonCount = d => Array.isArray(d.moons) ? d.moons.length : (typeof d.moons==='number' ? d.moons : (d.moon?1:0));
-const moonDistI = (d,i) => planetRadius(d)*2.2*(1+.35*i)+20;
+const moonDistI = (d,i) => { const m=Array.isArray(d.moons)&&d.moons[i]; return m&&m.mdist ? m.mdist : planetRadius(d)*2.2*(1+.35*i)+20; };
+const moonRF = m => m.rf===undefined ? .27 : m.rf;
+const holdsAir = m => !m.isMoon || moonRF(m)>=.38;
 const planetExtent = d => { const r=planetRadius(d), nm=moonCount(d); return Math.max(nm?moonDistI(d,nm-1)+r*.6+5:r, d.rings?r*2.3:r); };
 function disposeTree(o){ o.traverse(m => { if (m.geometry) m.geometry.dispose(); if (m.material){ [].concat(m.material).forEach(mt => { if (mt.map && mt.map!==GLOW) mt.map.dispose(); if (mt.emissiveMap) mt.emissiveMap.dispose(); mt.dispose(); }); } unpick(m); }); }
 
@@ -2752,8 +2775,10 @@ function buildPlanetMesh(d, ghost){
   let moonPivot=null;
   if (moonCount(d)){
     moonPivot=new THREE.Group(); g.add(moonPivot);
-    const mmat=new THREE.MeshStandardMaterial({color:0xc9c4d8,roughness:1,transparent:ghost,opacity:ghost?.65:1}), mgeo=new THREE.SphereGeometry(Math.max(.35,r*.27),16,12);
-    for (let i=0;i<moonCount(d);i++){ const moon=new THREE.Mesh(mgeo,mmat); moon.position.x=moonDistI(d,i); moon.position.z=i*3; moonPivot.add(moon); }
+    const ML=Array.isArray(d.moons)?d.moons:[];
+    for (let i=0;i<moonCount(d);i++){ const mo=ML[i]||{}, mt=mo.type&&mo.type!=='moon'?mo.type:'rocky', tx=sphereTexture(mt, mo.color||'#b9b4c4', mo.seed||(i+3));
+      const mmat=new THREE.MeshStandardMaterial({map:tx.map,roughness:1,transparent:ghost,opacity:ghost?.65:1}); if (tx.emissive){ mmat.emissiveMap=tx.emissive; mmat.emissive=new THREE.Color(0xffffff); mmat.emissiveIntensity=.8; }
+      const moon=new THREE.Mesh(new THREE.SphereGeometry(Math.max(.35,r*moonRF(mo)),20,14),mmat); moon.castShadow=true; moon.receiveShadow=true; moon.position.x=moonDistI(d,i); moon.position.z=i*3; moonPivot.add(moon); }
   }
   g.userData.mesh=mesh; g.userData.moonPivot=moonPivot; g.userData.r=r;
   return g;
@@ -2788,22 +2813,22 @@ function rebuildWorld(){ clearShips(); clearWorld(); S.stars.forEach(addStarObj)
 
 /* ================= GRAVITY, HABITABLE ZONES, COOLING ================= */
 const G_STAR=128000, PP=0.05;
-const STAR_MASS={red:.6,yellow:1,white:.8,blue:2.5,orange:.75,green:1.2,supergiant:3.2,neutron:3,violet:3.8,hole:4};
-const HAB_ZONE={red:[220,520],yellow:[600,1300],white:[400,900],blue:[1400,2600],orange:[350,800],green:[700,1500],supergiant:[2200,3800],violet:[1800,3200],neutron:null,hole:null};
+const STAR_MASS={red:.6,yellow:1,white:.8,blue:2.5,orange:.75,green:1.2,supergiant:3.2,neutron:3,violet:3.8,hole:4,brown:.35,pink:.9,teal:1.15,golden:2,redgiant:2.4,wolf:3.4,magnetar:3,quasar:5};
+const HAB_ZONE={brown:[90,220],pink:[520,1150],teal:[720,1550],golden:[1500,2900],redgiant:[2000,3500],wolf:[2600,4600],magnetar:null,quasar:[4000,7000],red:[220,520],yellow:[600,1300],white:[400,900],blue:[1400,2600],orange:[350,800],green:[700,1500],supergiant:[2200,3800],violet:[1800,3200],neutron:null,hole:null};
 const starGM = st => G_STAR*STAR_MASS[st.type]*(0.8+st.size*0.4);
 const planetGM = d => 833*Math.pow(planetRadius(d)/W,3);
 function habZone(st){ const z=HAB_ZONE[st.type]; if (!z) return null; const k=0.8+st.size*0.4; return [Math.round(z[0]*k), Math.round(z[1]*k)]; }
 function zoneAt(starId, r){ const st=S.stars.find(s=>s.id===starId), z=st&&habZone(st); if (!z) return 'none'; return r<z[0]?'hot':r>z[1]?'cold':'in'; }
 const planetDist = d => (d.px!==undefined ? Math.hypot(d.px,d.pz) : d.dist);
 /* ---- temperature: falls off with distance from the star; brighter stars warm wider orbits ---- */
-const STAR_HEAT={red:.55,orange:.75,yellow:1,white:1.1,green:1.05,blue:1.6,supergiant:1.9,violet:1.8,neutron:.3,hole:.15};
+const STAR_HEAT={brown:.3,pink:.95,teal:1.1,golden:1.7,redgiant:1.8,wolf:2.2,magnetar:.35,quasar:2.6,red:.55,orange:.75,yellow:1,white:1.1,green:1.05,blue:1.6,supergiant:1.9,violet:1.8,neutron:.3,hole:.15};
 function planetTemp(d){
   const w=d.isMoon?parentOf(d):d; if (!w) return null; const st=S.stars.find(s=>s.id===w.starId); if (!st) return null;
   const z=habZone(st), ref=z?(z[0]+z[1])/2:260*(STAR_HEAT[st.type]||.3), r=Math.max(20,planetDist(w));
   let C=288*Math.pow(ref/r,.25)-273;
   if (isGas(w.type)) C-=25;
   if (d.molten) C=Math.max(C,1100-Math.min(1,d.molten.t/COOL_TIME())*900);
-  else if (d.type==='lava') C=Math.max(C,C+380);
+  else C+=({lava:380,volcanic:240,toxic:330,hotjupiter:650})[d.type]||0;   // greenhouse gas, magma and roasted giants
   if (!d.isMoon && d.civ) C+=(d.civ.pollution||0)*.12;   // smog traps heat
   if (d.isMoon) C-=8;
   return Math.round(C);
@@ -2812,11 +2837,11 @@ function tempWord(C){ return C>=300?'scorching':C>=60?'very hot':C>=35?'hot':C>=
 function tempText(d){ const C=planetTemp(d); return C===null?'':`${C}°C, ${tempWord(C)}`; }
 // how much of the planet is frozen: 0 = no ice caps, 1 = a snowball world
 function frostOf(d){ const C=planetTemp(d); if (C===null || d.type==='lava' || d.molten) return 0; return Math.max(0,Math.min(1,(22-C)/100)); }
-const TERRESTRIAL = ['rocky','ocean','ice','lava','crystal','desert','jungle','iron'];
-const isGas = t => t==='gas'||t==='ringed'||t==='storm';
+const TERRESTRIAL = ['rocky','ocean','ice','lava','crystal','desert','jungle','iron','swamp','tundra','volcanic','canyon','toxic','diamond','islands','superearth','dwarf'];
+const isGas = t => t==='gas'||t==='ringed'||t==='storm'||!!(PLANET_TYPES[t]&&PLANET_TYPES[t].gas);
 const COOL_TIME = () => sb()?30:90;
 const moonDist = d => planetRadius(d)*2.2+20;
-const canTerraform = d => !d.isMoon && TERRESTRIAL.includes(d.type) && !d.habitable;
+const canTerraform = d => holdsAir(d) && (TERRESTRIAL.includes(d.type)||d.type==='moon') && !d.habitable;
 function initMoonOrbit(d, m, i){ const rm=moonDistI(d,i), a=i*2.4, v=Math.sqrt(planetGM(d)/rm); m.mx=Math.cos(a)*rm; m.mz=Math.sin(a)*rm; m.mvx=-Math.sin(a)*v; m.mvz=Math.cos(a)*v; }
 function addMoon(d){
   d.moons=d.moons||[]; const i=d.moons.length;
@@ -2880,7 +2905,8 @@ function updateCooling(dt){ for (const d of S.planets){ if (!d.molten) continue;
 function finishCooling(d){
   const goal=d.molten.goal, gcol=d.molten.color, z=zoneAt(d.starId, planetDist(d));
   let type=goal, hab=false, col=gcol;
-  if (['rocky','ocean','ice'].includes(goal) && Math.random()<habChance(d)){ type='ocean'; hab=true; col=goal==='ocean'?gcol:'#2f7fd6'; }
+  if (['islands','superearth','swamp','tundra'].includes(goal) && Math.random()<habChance(d)){ hab=true; }
+  else if (['rocky','ocean','ice'].includes(goal) && Math.random()<habChance(d)){ type='ocean'; hab=true; col=goal==='ocean'?gcol:'#2f7fd6'; }
   else if (goal==='ocean'){ type = z==='cold'?'ice':'rocky'; col=PLANET_TYPES[type].sw[0]; }
   becomeType(d,type,hab,col);
   toast(hab ? `${d.name} cooled into a habitable world!` : `${d.name} cooled into a ${PLANET_TYPES[type].name} planet.`, hab);
@@ -2896,6 +2922,7 @@ function becomeType(d, type, hab, color){
   if (hab) civInit(d); else delete d.civ;
   delete eFns[d.id]; liftBuildings(d);
   if (planetObjs[d.id]){ removePlanetObj(d.id); addPlanetObj(d); }
+  if (d.isMoon){ const p=parentOf(d); if (p && planetObjs[p.id]){ removePlanetObj(p.id); addPlanetObj(p); } }
   if (visit && visit.id===d.id) rebuildVisit();
   save(); renderHUD(); renderPanel();
 }
@@ -2924,7 +2951,7 @@ function updateZones(){
 }
 
 /* ================= CIVILIZATION ================= */
-function civInit(d){ if (d.habitable && !d.isMoon && !d.civ) d.civ={pop:4, era:0, prog:0, t:0}; }
+function civInit(d){ if (d.habitable && holdsAir(d) && !d.civ) d.civ={pop:4, era:0, prog:0, t:0}; }
 const areaCache={};
 function areaCap(d){
   const key=(d.terra?d.terra.length:0)+':'+d.type;
@@ -3365,7 +3392,7 @@ let simScale=1, crashSim=null, crashShake=0;
 const WARPS=[0,1,2,5,10,25,100]; let warpI=1;
 const debrisSims=[];
 const _cm=new THREE.Matrix4(), _cq=new THREE.Quaternion(), _cs=new V3(), _cp=new V3(), _cc=new THREE.Color();
-const bodyRadius = w => w.isMoon ? Math.max(.35,planetRadius(parentOf(w)||w)*.27) : planetRadius(w);
+const bodyRadius = w => w.isMoon ? Math.max(.35,planetRadius(parentOf(w)||w)*moonRF(w)) : planetRadius(w);
 function crashObj(c){ if (!c.small.isMoon){ const o=planetObjs[c.small.id]; return o?o.g:null; } const po=planetObjs[c.big.id], i=c.big.moons?c.big.moons.indexOf(c.small):-1; return po&&po.g.userData.moonPivot&&i>=0?po.g.userData.moonPivot.children[i]:null; }
 const quakeFx=[], _HOT=new THREE.Color(0xff6a14), _WHITE=new THREE.Color(0xfff2d0), _Z=new V3(0,0,1), _cp2=new V3();
 function makeDebris(P,n,big,small,rb,rs){
@@ -3479,6 +3506,39 @@ function meltWorld(p){   // the impact energy melts the whole crust: the planet 
   p.molten={goal,color:gcol,t:0,r:r0}; p.type='lava'; p.color='#ff6a1a'; p.habitable=false; delete p.civ; delete p.terraform;
   p.buildings=p.buildings.filter(x=>x.type==='pad'); delete eFns[p.id];
   return {saved,lost,hadCiv};
+}
+const MOON_LOOKS=[['moon','Grey rock','#b9b4c4'],['rocky','Rocky','#a8805a'],['ice','Ice','#dff2ff'],['desert','Desert','#e0b86a'],['iron','Iron','#8a8f99'],['crystal','Crystal','#b06cff'],['lava','Lava','#ff6a1a'],['canyon','Red canyon','#c4583a'],['tundra','Tundra','#b9c8c0'],['diamond','Diamond','#e8f4ff']];
+const MOON_COLS=['#b9b4c4','#d8d0c0','#8a8f99','#a8805a','#e0b86a','#dff2ff','#7fd4e8','#b06cff','#ff8ad8','#ff6a1a','#5cc85a','#3a3940'];
+let meMoon=null;
+function moonLimits(p,m){ const pr=planetRadius(p), mr=Math.max(.35,pr*moonRF(m)); return [Math.ceil(pr*1.45+mr+2), Math.round(pr*14+120)]; }
+function applyMoon(m, what){
+  const p=parentOf(m); if (!p) return;
+  if (what==='dist'){ const a=Math.atan2(m.mz||0,m.mx||1), rm=m.mdist, v=Math.sqrt(planetGM(p)/rm); m.mx=Math.cos(a)*rm; m.mz=Math.sin(a)*rm; m.mvx=-Math.sin(a)*v; m.mvz=Math.cos(a)*v; }
+  if (what==='look'){ delete eFns[m.id]; }
+  removePlanetObj(p.id); addPlanetObj(p); save(); renderSel();
+}
+function openMoonEdit(m){ meMoon=m; renderMoonEdit(); $('#moonModal').hidden=false; }
+function renderMoonEdit(){
+  const m=meMoon, p=m&&parentOf(m); if (!m||!p){ $('#moonModal').hidden=true; return; }
+  const [mn,mx]=moonLimits(p,m), dist=Math.round(m.mdist||Math.hypot(m.mx||0,m.mz||0)||moonDistI(p,(p.moons||[]).indexOf(m))), rf=moonRF(m), air=holdsAir(m);
+  $('#meTitle').textContent='Edit '+m.name;
+  let h=`<div class="lbl2">Terrain</div><div class="rowi" style="gap:6px;flex-wrap:wrap">${MOON_LOOKS.map(([k,n])=>`<button class="btn${(m.type||'moon')===k?' primary':''}" type="button" data-mlook="${k}">${n}</button>`).join('')}</div>`;
+  if (m.habitable) h+=`<p class="sm" style="margin:6px 0 0">This moon is habitable now. Changing its terrain will end that.</p>`;
+  h+=`<div class="lbl2">Size <span class="num" id="meSzV">${Math.round(rf*100)}%</span> of ${esc(p.name)}</div><input type="range" id="meSz" min="10" max="70" step="1" value="${Math.round(rf*100)}" style="width:100%">`;
+  h+=`<p class="sm" id="meAir" style="margin:4px 0 0;color:${air?'var(--feather)':'var(--muted)'}">${air?'Big enough to hold air: it can be terraformed and wild birds can live on it.':'Too small to hold air. Make it 38% or bigger to terraform it.'}</p>`;
+  h+=`<div class="lbl2">Distance from ${esc(p.name)} <span class="num" id="meDV">${dist}</span></div><input type="range" id="meD" min="${mn}" max="${mx}" step="1" value="${Math.max(mn,Math.min(mx,dist))}" style="width:100%">`;
+  h+=`<div class="lbl2">Colour</div><div class="rowi" style="gap:6px;flex-wrap:wrap">${MOON_COLS.map(c=>`<button type="button" data-mcol="${c}" aria-label="${c}" style="width:34px;height:34px;border-radius:50%;border:${(m.color||'').toLowerCase()===c?'3px solid #fff':'2px solid rgba(255,255,255,.2)'};background:${c}"></button>`).join('')}<input type="color" id="meC" value="${m.color||'#b9b4c4'}" style="width:44px;height:34px;border:none;background:none"></div>`;
+  h+=`<div class="rowi" style="gap:6px;margin-top:10px">${air&&!m.habitable?'<button class="btn teal" type="button" id="meLand">Land and build a Terraformer</button>':''}<button class="btn" type="button" id="meDone">Done</button></div>`;
+  $('#meBody').innerHTML=h;
+  $('#meBody').querySelectorAll('[data-mlook]').forEach(b=>b.onclick=()=>{ const k=b.dataset.mlook; m.type=k; m.habitable=false; delete m.civ; delete m.terraform; const L=MOON_LOOKS.find(x=>x[0]===k); m.color=L[2]; applyMoon(m,'look'); renderMoonEdit(); });
+  $('#meSz').oninput=e=>{ m.rf=+e.target.value/100; $('#meSzV').textContent=e.target.value+'%'; const a=holdsAir(m), t=$('#meAir'); t.textContent=a?'Big enough to hold air: it can be terraformed and wild birds can live on it.':'Too small to hold air. Make it 38% or bigger to terraform it.'; t.style.color=a?'var(--feather)':'var(--muted)'; };
+  $('#meSz').onchange=()=>{ const [mn2]=moonLimits(p,m); if ((m.mdist||0)<mn2){ m.mdist=mn2; applyMoon(m,'dist'); } else applyMoon(m,'size'); renderMoonEdit(); };
+  $('#meD').oninput=e=>{ $('#meDV').textContent=e.target.value; };
+  $('#meD').onchange=e=>{ m.mdist=+e.target.value; applyMoon(m,'dist'); };
+  $('#meBody').querySelectorAll('[data-mcol]').forEach(b=>b.onclick=()=>{ m.color=b.dataset.mcol; applyMoon(m,'color'); renderMoonEdit(); });
+  $('#meC').onchange=e=>{ m.color=e.target.value; applyMoon(m,'color'); renderMoonEdit(); };
+  if ($('#meLand')) $('#meLand').onclick=()=>{ $('#moonModal').hidden=true; visitPlanet(m.id); toast('Build a Terraformer here and put birds to work on it.'); };
+  $('#meDone').onclick=()=>{ $('#moonModal').hidden=true; };
 }
 function moonImpact(p,m){
   if (visit){ leavePlanet(true); tab='system'; renderTabs(); }
@@ -3747,7 +3807,7 @@ function findCivSpot(d, foot){
   return null;
 }
 /* ---- fossil fuels: hidden oil fields and coal seams left by ancient life ---- */
-const FOSSIL_TYPES={jungle:[4,3],ocean:[4,2],desert:[5,1],rocky:[2,3],ice:[1,1],iron:[1,4]};   // [oil fields, coal seams]
+const FOSSIL_TYPES={jungle:[4,3],ocean:[4,2],desert:[5,1],rocky:[2,3],ice:[1,1],iron:[1,4],swamp:[5,4],islands:[3,1],superearth:[5,4],tundra:[2,2],canyon:[2,2],toxic:[3,0]};   // [oil fields, coal seams]
 const fosCache={};
 function fossils(d){
   const T=!d.isMoon&&!d.molten&&FOSSIL_TYPES[d.type]; if (!T) return [];
@@ -4172,7 +4232,7 @@ function updateVillagers(dt, time){
 }
 
 /* ================= PLANET SURFACE MATH ================= */
-const surfR = d => d.isMoon ? 24 + d.size*12 : 40 + d.size*25;
+const surfR = d => d.isMoon ? 16 + moonRF(d)*66 : 40 + d.size*25;
 const eFns = {};
 const animK = new Map();
 function elevFn(d){
@@ -4521,7 +4581,7 @@ function terrainColor(d, e, dir, j){
     return C(stops[stops.length-1][1]);
   };
   let col;
-  switch(d.type){
+  switch(T.look||d.type){
     case 'ocean': col=ramp([[-1,'#6f6450'],[-.05,'#a8986c'],[.03,'#e2d3a2'],[.08,'#86b552'],[.45,'#4e9638'],[.72,'#2f6a2a'],[.88,'#6b675e'],[1.02,'#8d8981'],[1.12,'#f2f4f6']]); break;
     case 'rocky': col=base.clone().multiplyScalar(.5+.65*smooth(-1,1,t)).lerp(C('#a9a5a1'),smooth(.7,1.15,t)*.6); break;
     case 'ice':   col=ramp([[-.2,'#c8dcec'],[.3,'#f3f8ff'],[.8,'#dde9f5'],[1.1,'#b3c9dc']]).lerp(base,.12); break;
@@ -4883,8 +4943,8 @@ function tryPlace(type, dir, sx, sy){
   if (!unlocked(B.lvl)){ toast(`Reach Level ${B.lvl} first.`); return; }
   if (d.buildings.length>=MAX_BUILDINGS){ toast('This planet is full of buildings.'); return; }
   if (!isLand(d,dir)){ toast(d.type==='lava'?"You can't build on lava.":"You can't build on water."); return; }
-  if (B.civ){ if (!d.civ){ toast(d.isMoon?'Moons are too small for a civilization.':'Make this planet habitable first to start a civilization.'); return; } if (!sb() && B.era>d.civ.era){ toast(`The birds here need to reach the ${ERAS[B.era]} first.`); return; } }
-  if (B.terra){ if (d.isMoon){ toast('Moons are too small to hold air. Terraform a planet instead.'); return; } if (d.habitable){ toast('This planet is already habitable.'); return; } if (!TERRESTRIAL.includes(d.type)){ toast("Gas giants can't be terraformed."); return; } if (d.molten){ toast('Wait for the planet to cool down first.'); return; } }
+  if (B.civ){ if (!d.civ){ toast(d.isMoon&&!holdsAir(d)?'This moon is too small for a civilization.':'Make this world habitable first to start a civilization.'); return; } if (!sb() && B.era>d.civ.era){ toast(`The birds here need to reach the ${ERAS[B.era]} first.`); return; } }
+  if (B.terra){ if (!holdsAir(d)){ toast('This moon is too small to hold air. Make it bigger in Edit moon (size 38% or more), or terraform a planet.'); return; } if (d.habitable){ toast('This world is already habitable.'); return; } if (!TERRESTRIAL.includes(d.type) && d.type!=='moon'){ toast("Gas giants can't be terraformed."); return; } if (d.molten){ toast('Wait for the planet to cool down first.'); return; } }
   if (B.needs){ const f=fossilNear(d,dir,B.needs,4.5,true); if (!f){ toast(B.needs==='oil'?'There is no oil field here. Dig with the shovel or mine near it to find oil, then build on the black pool.':'There is no coal seam here. Dig with the shovel to find coal, then build on the black rocks.'); return; } dir=f.dir.clone(); }
   const clash=d.buildings.find(b => angBetween(dir,dirOf(b))*visit.R < BUILDINGS[b.type].foot+B.foot);
   if (clash){ toast(`Too close to the ${BUILDINGS[clash.type].name}.`); return; }
@@ -5451,7 +5511,7 @@ function renderPBuild(){
     h += `<button type="button" class="type${placing===k?' on':''}${lock?' locked':''}" data-place="${k}"><span class="ball" style="background:radial-gradient(circle at 35% 35%,#fff8,${B.color} 55%)"></span><b>${B.name}</b><small>${lock?'Level '+B.lvl:esc(B.out&&!B.terra?'Makes '+outHTML(B):B.desc)}</small>${lock?'':`<span class="costs">${costHTML(cost)}</span>`}</button>`;
   }
   h += `</div><h4>Civilization${d.civ?` · <span class="era-tag">${ERAS[d.civ.era]}</span>`:''}</h4>`;
-  if (!d.civ) h += `<p class="muted" style="margin:0;font-size:12px">${d.isMoon?'Moons are too small for a civilization.':'Make this planet habitable (cool it in the habitable zone or use a Terraformer) and wild birds will move in and build a civilization.'}</p>`;
+  if (!d.civ) h += `<p class="muted" style="margin:0;font-size:12px">${d.isMoon&&!holdsAir(d)?'This moon is too small to hold air. Make it bigger with Edit moon so it can be terraformed.':'Make this planet habitable (cool it in the habitable zone or use a Terraformer) and wild birds will move in and build a civilization.'}</p>`;
   else { h += `<p class="muted" style="margin:0 0 6px;font-size:12px">Your birds' civilization builds these on its own as it grows. You can also place them yourself.</p><div class="types">`;
     ERA_SETS.forEach((set,e) => set.forEach(k => { const B=BUILDINGS[k], lock=!sb() && e>d.civ.era;
       h += `<button type="button" class="type${placing===k?' on':''}${lock?' locked':''}" data-place="${k}"><span class="ball" style="background:radial-gradient(circle at 35% 35%,#fff8,${B.color} 55%)"></span><b>${B.name}</b><small>${lock?ERAS[e]:ERAS[e]+(B.homes?' · '+B.homes+' homes':'')+(B.machine?' · machine':'')}</small>${lock?'':`<span class="costs">${costHTML(buildingCost(k))}</span>`}</button>`; }));
@@ -5566,7 +5626,7 @@ function renderSel(){
     extraBtn=`<button class="btn teal" type="button" id="selVisit">Visit</button><button class="btn" type="button" id="selMoon">+ Moon</button><button class="btn danger" type="button" id="selCrash">Crash</button>`; }
   else if (selected.kind==='moon'){ d=getWorld(selected.id); if (!d){ selected=null; bar.hidden=true; return; } const p=parentOf(d);
     title=d.name; sub=`Moon of ${p?p.name:'?'}${tempText(d)?' · '+tempText(d):''} · ${birdsOn(d.id).length}/${capacity(d)} birds · ${d.buildings.length-1} buildings`; canDel=false;
-    extraBtn=`<button class="btn teal" type="button" id="selVisit">Land</button><button class="btn danger" type="button" id="selCrash">Crash</button>`; }
+    extraBtn=`<button class="btn teal" type="button" id="selVisit">Land</button><button class="btn" type="button" id="selMoonEdit">Edit moon</button><button class="btn danger" type="button" id="selCrash">Crash</button>`; }
   else if (selected.kind==='building'){ if (!visit){ selected=null; bar.hidden=true; return; } d=visit.d.buildings.find(b=>b.id===selected.id); if (!d){ selected=null; bar.hidden=true; return; }
     const B=BUILDINGS[d.type], jobs=jobsFor(visit.d), workers=Object.keys(jobs).filter(k=>jobs[k].job&&jobs[k].job.id===d.id).map(k=>BIRD[k].name);
     title=B.name; sub = B.civ ? `${ERAS[B.era]} · ${B.desc}${d.auto?' Built by the birds.':''}` : B.terra ? `${canTerraform(visit.d)?'Progress '+Math.floor(visit.d.terraform||0)+'%':'This world is already habitable'} · Workers: ${workers.length?workers.join(', '):'none'} (max ${WORKERS_PER})` : B.out ? `Each job: ${outHTML(B)} · Workers: ${workers.length?workers.join(', '):'none'} (max ${WORKERS_PER})` : B.desc;
@@ -5575,6 +5635,7 @@ function renderSel(){
   bar.innerHTML=`<div class="grow"><h3>${esc(title)}</h3><p>${esc(sub)}</p></div>${extraBtn}${canDel?'<button class="btn danger" type="button" id="selDel">Demolish</button>':''}<button class="btn" type="button" id="selClose">Close</button>`;
   $('#selClose').onclick=()=>{ selected=null; follow=null; renderSel(); };
   if ($('#selVisit')) $('#selVisit').onclick=()=>visitPlanet(d.id);
+  if ($('#selMoonEdit')) $('#selMoonEdit').onclick=()=>openMoonEdit(d);
   if ($('#selCrash')) $('#selCrash').onclick=()=>{
     if (d.isMoon){
       const par=parentOf(d); if (!par || d.mx===undefined){ toast('This moon has no planet to crash into.'); return; }
@@ -5837,6 +5898,8 @@ $('#resetNormal').onclick=()=>confirmBox('Delete your Normal save? Your level, s
 $('#resetSandbox').onclick=()=>confirmBox('Delete your Sandbox save?','Delete',()=>{ clearSave('sandbox'); menuInfo(); toast('Sandbox save deleted.'); });
 $('#fxBtn').onclick=()=>{ fxOn=!fxOn; fxBroken=false; try{localStorage.setItem('birdverse-fx',fxOn?'1':'0');}catch(e){} syncFxBtn(); }; syncFxBtn();
 $('#spinBtn').onclick=()=>{ spinOn=!spinOn; try{localStorage.setItem('birdverse-spin',spinOn?'1':'0');}catch(e){} syncSpin(); };
+$('#meX').onclick=()=>{ $('#moonModal').hidden=true; };
+$('#moonModal').addEventListener('pointerdown', e => { if (e.target===$('#moonModal')) $('#moonModal').hidden=true; });
 addEventListener('pagehide', save);
 document.addEventListener('visibilitychange', () => { if (document.hidden) save(); else { last=performance.now(); if (performance.now()-lastTick>500) requestAnimationFrame(tick); } });
 setInterval(()=>{ if (!document.hidden && lastTick && performance.now()-lastTick>1500){ last=performance.now(); requestAnimationFrame(tick); } },1000);
