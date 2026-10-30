@@ -4440,7 +4440,14 @@ let last=performance.now(), time=0, hudT=0, lbT=0, saveT=0, costT=0, selT=0;
 function resize(){ const w=innerWidth, h=innerHeight; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
 
+let lastTick=0, tickErr=0;
 function tick(now){
+  lastTick=performance.now();
+  try{ tick0(now); tickErr=0; }
+  catch(e){ if (++tickErr<4) console.error(e); if (tickErr>=3){ try{ if (typeof view!=='undefined' && view==='planet') { warpI=0; } }catch(_){} }
+    last=now; requestAnimationFrame(tick); }
+}
+function tick0(now){
   const rdt=Math.min(.1,(now-last)/1000), dt=rdt*simScale; last=now; time+=dt; if (S) updateCrash(rdt);
   const sdt=dt*(crashSim?1:WARPS[warpI]), vdt=dt*Math.min(3,Math.max(1,crashSim?1:WARPS[warpI]));
   sourceObjs.asteroids.rotation.y+=dt*.03;
@@ -4554,7 +4561,8 @@ $('#driftSlider').oninput=e=>{ if (visit&&visit.drift){ const k=e.target.value/1
 $('#resetNormal').onclick=()=>confirmBox('Delete your Normal save? Your level, seeds and planets will be lost.','Delete',()=>{ clearSave('normal'); menuInfo(); toast('Normal save deleted.'); });
 $('#resetSandbox').onclick=()=>confirmBox('Delete your Sandbox save?','Delete',()=>{ clearSave('sandbox'); menuInfo(); toast('Sandbox save deleted.'); });
 addEventListener('pagehide', save);
-document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) save(); else { last=performance.now(); if (performance.now()-lastTick>500) requestAnimationFrame(tick); } });
+setInterval(()=>{ if (!document.hidden && lastTick && performance.now()-lastTick>1500){ last=performance.now(); requestAnimationFrame(tick); } },1000);
 
 function boot(data){
   menuInfo();
