@@ -238,7 +238,7 @@ input[type=color]{width:34px;height:30px;border:0;background:transparent;padding
 <div class="toasts" id="toasts"></div>
 
 <div class="menu" id="menu">
-  <div style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 49 · oil and coal</div>
+  <div style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 50 · traffic</div>
   <div class="menu-inner">
     <h1 class="logo">Birdverse</h1>
     <p class="tagline">Build a star, grow planets, and help your flock farm, mine and build on them.</p>
@@ -3878,6 +3878,59 @@ function puffAt(dir,size,hot){
   sp.scale.set(size,size,1); sp.position.copy(dir).multiplyScalar(groundR(visit.d,dir)+1); visit.scene.add(sp);
   visit.fxl.push({sp,t:0,life:hot?.5:3.2,size,up:dir.clone(),hot});
 }
+/* ---- civilian traffic: carts, steam cars, cars, buses, trucks, hover cars and flying cars ---- */
+const CAR_COLS=['#e0473a','#3f7fe0','#f2c230','#f4f4fa','#2a2a33','#3fbf7a','#ff8a2a','#9a5ad6','#7a8a99'];
+function carKind(era){ const r=Math.random();
+  if (era<4) return 'cart';
+  if (era===4) return r<.75?'oldcar':'truck';
+  if (era<7) return r<.6?'car':r<.8?'bus':'truck';
+  if (era<9) return r<.55?'hover':r<.75?'flyer':'bus';
+  return r<.5?'flyer':'hover'; }
+function spawnCar(era){
+  const d=visit.d, kind=carKind(era), g=new THREE.Group(), col=pickOne(CAR_COLS), wheels=[];
+  const add=(geo,mat,x,y,z)=>{ const m=new THREE.Mesh(geo,mat); m.position.set(x,y,z); g.add(m); return m; };
+  const paint=M(col,{metalness:.5,roughness:.35}), glass=M('#9fd8ff',{metalness:.2,roughness:.1}), tire=M('#1c1c1c',{roughness:.9}), steel=M('#c9cfe0',{metalness:.7,roughness:.3});
+  const wheel=(x,z,rad)=>{ const w=new THREE.Mesh(new THREE.CylinderGeometry(rad,rad,.16,10),tire); w.rotation.z=Math.PI/2; w.position.set(x,rad,z); g.add(w); wheels.push(w); };
+  let hover=0, len=1.4;
+  if (kind==='cart'){ add(new THREE.BoxGeometry(.8,.3,1.1),M('#a0703f'),0,.45,0); add(new THREE.BoxGeometry(.85,.25,.06),M('#7a4a2a'),0,.68,.55); add(new THREE.BoxGeometry(.85,.25,.06),M('#7a4a2a'),0,.68,-.55);
+    add(new THREE.CylinderGeometry(.03,.03,.9,5),M('#7a4a2a'),.15,.4,.95).rotation.x=Math.PI/2.4; add(new THREE.CylinderGeometry(.03,.03,.9,5),M('#7a4a2a'),-.15,.4,.95).rotation.x=Math.PI/2.4;
+    const ld=add(new THREE.SphereGeometry(.28,8,6),M(pickOne(['#d9c35a','#c69c72','#9bd15a'])),0,.7,0); ld.scale.set(1.2,.6,1.4); wheel(.45,0,.3); wheel(-.45,0,.3); }
+  else if (kind==='oldcar'){ add(new THREE.BoxGeometry(.8,.35,1.4),M(pickOne(['#2a2a33','#5a2a20','#2a4a3a'])),0,.45,0); add(new THREE.BoxGeometry(.7,.4,.6),M('#2a2a33'),0,.8,-.15);
+    add(new THREE.CylinderGeometry(.08,.08,.35,6),steel,.25,.75,.55); [[.42,.5],[-.42,.5],[.42,-.45],[-.42,-.45]].forEach(([x,z])=>wheel(x,z,.22)); }
+  else if (kind==='car'){ const b=add(new THREE.BoxGeometry(.85,.32,1.6),paint,0,.38,0); add(new THREE.BoxGeometry(.75,.3,.85),glass,0,.68,-.1);
+    add(new THREE.BoxGeometry(.2,.08,.04),M('#fff6c0',{emissive:new THREE.Color('#fff6c0'),emissiveIntensity:1.2}),.25,.42,.81); add(new THREE.BoxGeometry(.2,.08,.04),M('#fff6c0',{emissive:new THREE.Color('#fff6c0'),emissiveIntensity:1.2}),-.25,.42,.81);
+    add(new THREE.BoxGeometry(.2,.08,.04),M('#ff2a2a',{emissive:new THREE.Color('#ff2a2a'),emissiveIntensity:1}),.25,.42,-.81); add(new THREE.BoxGeometry(.2,.08,.04),M('#ff2a2a',{emissive:new THREE.Color('#ff2a2a'),emissiveIntensity:1}),-.25,.42,-.81);
+    [[.43,.5],[-.43,.5],[.43,-.5],[-.43,-.5]].forEach(([x,z])=>wheel(x,z,.2)); }
+  else if (kind==='bus'){ len=2.6; add(new THREE.BoxGeometry(.95,.85,2.6),M(era>=7?'#e8f4ff':'#f2c230',{metalness:.3,roughness:.4}),0,.72,0); add(new THREE.BoxGeometry(.97,.3,2.3),glass,0,.92,0); add(new THREE.BoxGeometry(.96,.06,2.62),M('#2a2a33'),0,.45,0);
+    if (era>=7){ hover=1; add(new THREE.BoxGeometry(.7,.06,2.2),M('#66ffee',{emissive:new THREE.Color('#66ffee'),emissiveIntensity:1.4}),0,.22,0); } else [[.48,.85],[-.48,.85],[.48,-.85],[-.48,-.85]].forEach(([x,z])=>wheel(x,z,.24)); }
+  else if (kind==='truck'){ len=2.2; add(new THREE.BoxGeometry(.85,.6,.7),paint,0,.6,.7); add(new THREE.BoxGeometry(.75,.25,.05),glass,0,.75,1.06); add(new THREE.BoxGeometry(.95,.95,1.4),M(pickOne(['#e8e8ee','#c9ced8','#e0a040'])),0,.8,-.35);
+    [[.45,.75],[-.45,.75],[.45,-.6],[-.45,-.6],[.45,-.9],[-.45,-.9]].forEach(([x,z])=>wheel(x,z,.24)); }
+  else { // hover car / flying car
+    const b=add(new THREE.SphereGeometry(.55,14,10),paint,0,.4,0); b.scale.set(.85,.42,1.5); add(new THREE.SphereGeometry(.4,12,8),glass,0,.6,-.05).scale.set(.75,.5,1);
+    const gl=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0x66ffee,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false})); gl.scale.set(1.3,1.3,1); gl.position.y=.05; g.add(gl);
+    hover=kind==='flyer'?2:1; }
+  shadowify(g); g.scale.setScalar(.9); visit.scene.add(g);
+  let start=null; for (let k=0;k<12;k++){ const b=d.buildings.length?pickOne(d.buildings):null, t=b?jitterDir(dirOf(b),BUILDINGS[b.type].foot+1.5):homeDir(); if (isLand(d,t)){ start=t; break; } } if (!start) start=homeDir();
+  const v={kind:'car', car:kind, g, wheels, dir:start, state:'idle', wait:Math.random()*3, age:0, speed:kind==='cart'?1.6:kind==='oldcar'?3.5:hover===2?9:hover?7:5+Math.random()*2, phase:Math.random()*10, q:new THREE.Quaternion(), from:null, to:null, axis:new V3(1,0,0), ang:0, t:0, hover, alt:hover===2?5+Math.random()*5:0, smokeT:Math.random()*2};
+  visit.vill.cars.push(v); return v;
+}
+function removeCar(v){ visit.scene.remove(v.g); disposeTree(v.g); const i=visit.vill.cars.indexOf(v); if (i>=0) visit.vill.cars.splice(i,1); }
+function updateTraffic(dt){
+  const vs=visit.vill, d=visit.d, c=d.civ; vs.cars=vs.cars||[];
+  const era=c?c.era:0, fuel=d.buildings.some(b=>b.type==='derrick'||b.type==='oilrig'||b.type==='oilpump')||S.mats.oil>=10;
+  let want=(!c||era<1)?0:Math.min(32,Math.round(c.pop/(era>=5?5:era>=4?8:14)));
+  if (era>=4 && era<7 && !fuel) want=Math.ceil(want*.35);   // engines need oil: without fuel most cars stay parked
+  if (vs.carEra!==era){ vs.cars.slice().forEach(removeCar); vs.carEra=era; }
+  while (vs.cars.length<want) spawnCar(era);
+  while (vs.cars.length>want) removeCar(vs.cars[vs.cars.length-1]);
+  vs.cars.forEach(v => {
+    const moving=moveEnt(v,dt) && v.state!=='idle';
+    const fly=v.hover===2?v.alt*Math.min(1,Math.sin(Math.PI*Math.min(1,v.t))*1.6):0;
+    v.g.position.copy(v.dir).multiplyScalar(groundR(d,v.dir)+(v.hover?.8+Math.sin(time*3+v.phase)*.08+fly:.02)); v.g.quaternion.copy(v.q);
+    if (moving) v.wheels.forEach(w => { w.rotation.x+=dt*v.speed*3; });
+    if (v.car==='oldcar' && moving){ v.smokeT-=dt; if (v.smokeT<=0){ v.smokeT=.5+Math.random(); puffAt(v.dir,.9,false); } }
+  });
+}
 function spawnVehicle(id){
   const d=visit.d, nn=d.civ.nations.find(x=>x.id===id), era=d.civ.era, g=new THREE.Group();
   const add=(geo,mat,x,y,z)=>{ const m=new THREE.Mesh(geo,mat); m.position.set(x,y,z); g.add(m); return m; };
@@ -4007,6 +4060,7 @@ function updateVillagers(dt, time){
   if (!wars.length) vs.deaths=0;
   // war machines, tracer fire, smoke and ruins
   vs.vehicles=vs.vehicles||[]; visit.fxl=visit.fxl||[]; visit.shots=visit.shots||[];
+  updateTraffic(dt);
   const vehWant={};
   if (wars.length && c.era>=4) for (const id in want){ const nn=c.nations.find(x=>x.id===id); if (nn) vehWant[id]=Math.min(6,Math.round(nn.army/10)); }
   for (const id in vehWant){ const mine=vs.vehicles.filter(v=>v.nation===id); while (mine.length<vehWant[id]) mine.push(spawnVehicle(id)); while (mine.length>vehWant[id]) removeVehicle(mine.pop()); }
