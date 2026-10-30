@@ -237,6 +237,7 @@ input[type=color]{width:34px;height:30px;border:0;background:transparent;padding
 <div class="toasts" id="toasts"></div>
 
 <div class="menu" id="menu">
+  <div style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 45 · spin, 30 bird species</div>
   <div class="menu-inner">
     <h1 class="logo">Birdverse</h1>
     <p class="tagline">Build a star, grow planets, and help your flock farm, mine and build on them.</p>
@@ -2082,7 +2083,7 @@ function nationAt(d, dir, wantBorder){
   return wantBorder ? {n:N[bi], border:best-second<.06} : N[bi];
 }
 function newNationName(d){ const used=(d.civ.nations||[]).map(n=>n.name); for (let i=0;i<40;i++){ const nm=pickOne(NA_A)+pickOne(NA_B); if (!used.includes(nm)) return nm; } return pickOne(NA_A)+pickOne(NA_B)+' II'; }
-const SPECIES_RACE=[['lovebird',7],['cockatiel',2],['lorikeet',8],['canary',3],['budgie',0],['macaw',11],['dove',9],['robin',10],['sparrow',4],['pigeon',5],['cardinal',6]];
+const SPECIES_RACE=[['lovebird',7],['cockatiel',2],['lorikeet',8],['canary',3],['budgie',0],['macaw',11],['dove',9],['robin',10],['sparrow',4],['flamingo',12],['goldfinch',13],['blackbird',14],['jay',15],['cockatoo',16],['owl',17],['parakeet',18],['kingfisher',19],['finch',20],['swallow',21],['hummingbird',22],['starling',23],['penguin',24],['quail',25],['toucan',27],['wren',28],['pigeon',5],['cardinal',6]];
 function raceOfSpecies(sp){ sp=(sp||'').toLowerCase(); for (const [k,r] of SPECIES_RACE) if (sp.includes(k)) return r; return null; }
 function founderRace(d){ for (const b of birdsOn(d.id)){ const r=raceOfSpecies((BIRD[b.id]||{}).species); if (r!==null) return r; } return null; }
 function foundNation(d, o){
@@ -2729,7 +2730,8 @@ function civBuild(d){
 const WILD=[['#5cc85a','#fff36b','#7ed957','#3a9a42','Budgie'],['#4f9fe0','#e8f4ff','#ffffff','#2f6fb0','Blue budgie'],['#9a9aa6','#c9c9d2','#ffd93b','#77777f','Cockatiel'],
   ['#ffe03a','#fff09a','#ffe03a','#d9b81c','Canary'],['#8a6a4a','#d9c2a0','#8a6a4a','#5a4026','Sparrow'],['#7a7f8c','#a9aebb','#5b7f6a','#5c606b','Pigeon'],
   ['#d9302c','#e8584f','#d9302c','#9a1f1c','Cardinal'],['#4fae3a','#a8d048','#ff6a34','#2f8f33','Lovebird'],['#3157d6','#ff8a1f','#3157d6','#2fb04a','Lorikeet'],
-  ['#f4f4fa','#ffffff','#f4f4fa','#d6d6e6','Dove'],['#6b5040','#e07a3a','#6b5040','#4a3428','Robin'],['#2fb4ff','#fff36b','#2fb4ff','#1677c9','Macaw']];
+  ['#f4f4fa','#ffffff','#f4f4fa','#d6d6e6','Dove'],['#6b5040','#e07a3a','#6b5040','#4a3428','Robin'],['#2fb4ff','#fff36b','#2fb4ff','#1677c9','Macaw'],
+  ['#ff7ac8','#ffd1ea','#ff7ac8','#c9468f','Flamingo'],['#ffd23a','#1c1c1c','#ffd23a','#e0a800','Goldfinch'],['#2a2a33','#ff9a1f','#2a2a33','#15151b','Blackbird'],['#1f8fd6','#7fd3ff','#1f8fd6','#0f5f9f','Blue jay'],['#fff','#ffd23a','#ffffff','#e8e8f0','Cockatoo'],['#e8e0d0','#f4c06a','#bfb4a0','#8f8575','Owl'],['#2bb673','#ffd23a','#2bb673','#0f7a4a','Parakeet'],['#14a39a','#7af0e0','#14a39a','#0a6d68','Kingfisher'],['#c24b1f','#ffb15a','#c24b1f','#7a2a0f','Finch'],['#2a3a8a','#9ab0ff','#2a3a8a','#161f55','Swallow'],['#ff5a8a','#ffe0ea','#ff5a8a','#c02a5a','Hummingbird'],['#8a2be2','#d8a8ff','#8a2be2','#5a1a9a','Violet starling'],['#222','#ffffff','#222','#000','Penguin'],['#d8b45a','#fff1c0','#d8b45a','#a98830','Quail'],['#3f7f3f','#c9e07a','#3f7f3f','#245024','Green parrot'],['#ff8a1f','#ffe08a','#ff8a1f','#c4570a','Toucan'],['#9a5a2f','#e8c9a0','#9a5a2f','#5f3418','Wren'],['#eaf6ff','#9fd8ff','#eaf6ff','#7fb8e0','Snow finch']];
 const WILD_NAMES=['Pip','Tweety','Kiki','Nugget','Biscuit','Peaches','Sunny','Mochi','Bubbles','Ziggy','Coco','Pepper','Sky','Olive','Kiwi','Mango','Bean','Noodle','Twix','Hazel','Juniper','Pebble','Rio','Zara','Basil','Clover','Luna','Ozzy','Taco','Waffles'];
 function makeVillagers(ps){
   const N=MAX_POP, L=(p,r,sc)=>new THREE.Matrix4().compose(new V3(...p), new THREE.Quaternion().setFromEuler(new THREE.Euler(...r)), new V3(...sc));
