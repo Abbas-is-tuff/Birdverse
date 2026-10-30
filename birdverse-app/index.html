@@ -202,6 +202,7 @@ input[type=color]{width:34px;height:30px;border:0;background:transparent;padding
     <button class="iconbtn" id="warpBtn" type="button">Time ×1</button>
     <button class="iconbtn" id="tipBtn" type="button">Hide tips</button>
     <button class="iconbtn" id="musicBtn" type="button">Music: On</button>
+    <button class="iconbtn" id="fxBtn" type="button">Graphics: Ultra</button>
     <button class="iconbtn" id="warBtn" type="button">War</button>
     <button class="iconbtn" id="lbBtn" type="button">Leaderboard</button>
     <button class="iconbtn" id="saveBtn" type="button">Save</button>
@@ -237,7 +238,7 @@ input[type=color]{width:34px;height:30px;border:0;background:transparent;padding
 <div class="toasts" id="toasts"></div>
 
 <div class="menu" id="menu">
-  <div style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 46 · planet spin, 30 bird species</div>
+  <div style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 47 · lava crashes, war events, Ultra graphics</div>
   <div class="menu-inner">
     <h1 class="logo">Birdverse</h1>
     <p class="tagline">Build a star, grow planets, and help your flock farm, mine and build on them.</p>
@@ -1313,6 +1314,917 @@ input[type=color]{width:34px;height:30px;border:0;background:transparent;padding
 
 } )();
 </script>
+<script>( function () {
+
+	/**
+ * Full-screen textured quad shader
+ */
+	var CopyShader = {
+		uniforms: {
+			'tDiffuse': {
+				value: null
+			},
+			'opacity': {
+				value: 1.0
+			}
+		},
+		vertexShader:
+  /* glsl */
+  `
+
+		varying vec2 vUv;
+
+		void main() {
+
+			vUv = uv;
+			gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+
+		}`,
+		fragmentShader:
+  /* glsl */
+  `
+
+		uniform float opacity;
+
+		uniform sampler2D tDiffuse;
+
+		varying vec2 vUv;
+
+		void main() {
+
+			vec4 texel = texture2D( tDiffuse, vUv );
+			gl_FragColor = opacity * texel;
+
+		}`
+	};
+
+	THREE.CopyShader = CopyShader;
+
+} )();
+</script>
+<script>( function () {
+
+	/**
+ * Luminosity
+ * http://en.wikipedia.org/wiki/Luminosity
+ */
+
+	const LuminosityHighPassShader = {
+		shaderID: 'luminosityHighPass',
+		uniforms: {
+			'tDiffuse': {
+				value: null
+			},
+			'luminosityThreshold': {
+				value: 1.0
+			},
+			'smoothWidth': {
+				value: 1.0
+			},
+			'defaultColor': {
+				value: new THREE.Color( 0x000000 )
+			},
+			'defaultOpacity': {
+				value: 0.0
+			}
+		},
+		vertexShader:
+  /* glsl */
+  `
+
+		varying vec2 vUv;
+
+		void main() {
+
+			vUv = uv;
+
+			gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+
+		}`,
+		fragmentShader:
+  /* glsl */
+  `
+
+		uniform sampler2D tDiffuse;
+		uniform vec3 defaultColor;
+		uniform float defaultOpacity;
+		uniform float luminosityThreshold;
+		uniform float smoothWidth;
+
+		varying vec2 vUv;
+
+		void main() {
+
+			vec4 texel = texture2D( tDiffuse, vUv );
+
+			vec3 luma = vec3( 0.299, 0.587, 0.114 );
+
+			float v = dot( texel.xyz, luma );
+
+			vec4 outputColor = vec4( defaultColor.rgb, defaultOpacity );
+
+			float alpha = smoothstep( luminosityThreshold, luminosityThreshold + smoothWidth, v );
+
+			gl_FragColor = mix( outputColor, texel, alpha );
+
+		}`
+	};
+
+	THREE.LuminosityHighPassShader = LuminosityHighPassShader;
+
+} )();
+</script>
+<script>( function () {
+
+	class EffectComposer {
+
+		constructor( renderer, renderTarget ) {
+
+			this.renderer = renderer;
+
+			if ( renderTarget === undefined ) {
+
+				const parameters = {
+					minFilter: THREE.LinearFilter,
+					magFilter: THREE.LinearFilter,
+					format: THREE.RGBAFormat
+				};
+				const size = renderer.getSize( new THREE.Vector2() );
+				this._pixelRatio = renderer.getPixelRatio();
+				this._width = size.width;
+				this._height = size.height;
+				renderTarget = new THREE.WebGLRenderTarget( this._width * this._pixelRatio, this._height * this._pixelRatio, parameters );
+				renderTarget.texture.name = 'EffectComposer.rt1';
+
+			} else {
+
+				this._pixelRatio = 1;
+				this._width = renderTarget.width;
+				this._height = renderTarget.height;
+
+			}
+
+			this.renderTarget1 = renderTarget;
+			this.renderTarget2 = renderTarget.clone();
+			this.renderTarget2.texture.name = 'EffectComposer.rt2';
+			this.writeBuffer = this.renderTarget1;
+			this.readBuffer = this.renderTarget2;
+			this.renderToScreen = true;
+			this.passes = []; // dependencies
+
+			if ( THREE.CopyShader === undefined ) {
+
+				console.error( 'THREE.EffectComposer relies on THREE.CopyShader' );
+
+			}
+
+			if ( THREE.ShaderPass === undefined ) {
+
+				console.error( 'THREE.EffectComposer relies on THREE.ShaderPass' );
+
+			}
+
+			this.copyPass = new THREE.ShaderPass( THREE.CopyShader );
+			this.clock = new THREE.Clock();
+
+		}
+
+		swapBuffers() {
+
+			const tmp = this.readBuffer;
+			this.readBuffer = this.writeBuffer;
+			this.writeBuffer = tmp;
+
+		}
+
+		addPass( pass ) {
+
+			this.passes.push( pass );
+			pass.setSize( this._width * this._pixelRatio, this._height * this._pixelRatio );
+
+		}
+
+		insertPass( pass, index ) {
+
+			this.passes.splice( index, 0, pass );
+			pass.setSize( this._width * this._pixelRatio, this._height * this._pixelRatio );
+
+		}
+
+		removePass( pass ) {
+
+			const index = this.passes.indexOf( pass );
+
+			if ( index !== - 1 ) {
+
+				this.passes.splice( index, 1 );
+
+			}
+
+		}
+
+		isLastEnabledPass( passIndex ) {
+
+			for ( let i = passIndex + 1; i < this.passes.length; i ++ ) {
+
+				if ( this.passes[ i ].enabled ) {
+
+					return false;
+
+				}
+
+			}
+
+			return true;
+
+		}
+
+		render( deltaTime ) {
+
+			// deltaTime value is in seconds
+			if ( deltaTime === undefined ) {
+
+				deltaTime = this.clock.getDelta();
+
+			}
+
+			const currentRenderTarget = this.renderer.getRenderTarget();
+			let maskActive = false;
+
+			for ( let i = 0, il = this.passes.length; i < il; i ++ ) {
+
+				const pass = this.passes[ i ];
+				if ( pass.enabled === false ) continue;
+				pass.renderToScreen = this.renderToScreen && this.isLastEnabledPass( i );
+				pass.render( this.renderer, this.writeBuffer, this.readBuffer, deltaTime, maskActive );
+
+				if ( pass.needsSwap ) {
+
+					if ( maskActive ) {
+
+						const context = this.renderer.getContext();
+						const stencil = this.renderer.state.buffers.stencil; //context.stencilFunc( context.NOTEQUAL, 1, 0xffffffff );
+
+						stencil.setFunc( context.NOTEQUAL, 1, 0xffffffff );
+						this.copyPass.render( this.renderer, this.writeBuffer, this.readBuffer, deltaTime ); //context.stencilFunc( context.EQUAL, 1, 0xffffffff );
+
+						stencil.setFunc( context.EQUAL, 1, 0xffffffff );
+
+					}
+
+					this.swapBuffers();
+
+				}
+
+				if ( THREE.MaskPass !== undefined ) {
+
+					if ( pass instanceof THREE.MaskPass ) {
+
+						maskActive = true;
+
+					} else if ( pass instanceof THREE.ClearMaskPass ) {
+
+						maskActive = false;
+
+					}
+
+				}
+
+			}
+
+			this.renderer.setRenderTarget( currentRenderTarget );
+
+		}
+
+		reset( renderTarget ) {
+
+			if ( renderTarget === undefined ) {
+
+				const size = this.renderer.getSize( new THREE.Vector2() );
+				this._pixelRatio = this.renderer.getPixelRatio();
+				this._width = size.width;
+				this._height = size.height;
+				renderTarget = this.renderTarget1.clone();
+				renderTarget.setSize( this._width * this._pixelRatio, this._height * this._pixelRatio );
+
+			}
+
+			this.renderTarget1.dispose();
+			this.renderTarget2.dispose();
+			this.renderTarget1 = renderTarget;
+			this.renderTarget2 = renderTarget.clone();
+			this.writeBuffer = this.renderTarget1;
+			this.readBuffer = this.renderTarget2;
+
+		}
+
+		setSize( width, height ) {
+
+			this._width = width;
+			this._height = height;
+			const effectiveWidth = this._width * this._pixelRatio;
+			const effectiveHeight = this._height * this._pixelRatio;
+			this.renderTarget1.setSize( effectiveWidth, effectiveHeight );
+			this.renderTarget2.setSize( effectiveWidth, effectiveHeight );
+
+			for ( let i = 0; i < this.passes.length; i ++ ) {
+
+				this.passes[ i ].setSize( effectiveWidth, effectiveHeight );
+
+			}
+
+		}
+
+		setPixelRatio( pixelRatio ) {
+
+			this._pixelRatio = pixelRatio;
+			this.setSize( this._width, this._height );
+
+		}
+
+	}
+
+	class Pass {
+
+		constructor() {
+
+			// if set to true, the pass is processed by the composer
+			this.enabled = true; // if set to true, the pass indicates to swap read and write buffer after rendering
+
+			this.needsSwap = true; // if set to true, the pass clears its buffer before rendering
+
+			this.clear = false; // if set to true, the result of the pass is rendered to screen. This is set automatically by EffectComposer.
+
+			this.renderToScreen = false;
+
+		}
+
+		setSize( ) {}
+
+		render( ) {
+
+			console.error( 'THREE.Pass: .render() must be implemented in derived pass.' );
+
+		}
+
+	} // Helper for passes that need to fill the viewport with a single quad.
+
+
+	const _camera = new THREE.OrthographicCamera( - 1, 1, 1, - 1, 0, 1 ); // https://github.com/mrdoob/three.js/pull/21358
+
+
+	const _geometry = new THREE.BufferGeometry();
+
+	_geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( [ - 1, 3, 0, - 1, - 1, 0, 3, - 1, 0 ], 3 ) );
+
+	_geometry.setAttribute( 'uv', new THREE.Float32BufferAttribute( [ 0, 2, 0, 0, 2, 0 ], 2 ) );
+
+	class FullScreenQuad {
+
+		constructor( material ) {
+
+			this._mesh = new THREE.Mesh( _geometry, material );
+
+		}
+
+		dispose() {
+
+			this._mesh.geometry.dispose();
+
+		}
+
+		render( renderer ) {
+
+			renderer.render( this._mesh, _camera );
+
+		}
+
+		get material() {
+
+			return this._mesh.material;
+
+		}
+
+		set material( value ) {
+
+			this._mesh.material = value;
+
+		}
+
+	}
+
+	THREE.EffectComposer = EffectComposer;
+	THREE.FullScreenQuad = FullScreenQuad;
+	THREE.Pass = Pass;
+
+} )();
+</script>
+<script>( function () {
+
+	class RenderPass extends THREE.Pass {
+
+		constructor( scene, camera, overrideMaterial, clearColor, clearAlpha ) {
+
+			super();
+			this.scene = scene;
+			this.camera = camera;
+			this.overrideMaterial = overrideMaterial;
+			this.clearColor = clearColor;
+			this.clearAlpha = clearAlpha !== undefined ? clearAlpha : 0;
+			this.clear = true;
+			this.clearDepth = false;
+			this.needsSwap = false;
+			this._oldClearColor = new THREE.Color();
+
+		}
+
+		render( renderer, writeBuffer, readBuffer
+			/*, deltaTime, maskActive */
+		) {
+
+			const oldAutoClear = renderer.autoClear;
+			renderer.autoClear = false;
+			let oldClearAlpha, oldOverrideMaterial;
+
+			if ( this.overrideMaterial !== undefined ) {
+
+				oldOverrideMaterial = this.scene.overrideMaterial;
+				this.scene.overrideMaterial = this.overrideMaterial;
+
+			}
+
+			if ( this.clearColor ) {
+
+				renderer.getClearColor( this._oldClearColor );
+				oldClearAlpha = renderer.getClearAlpha();
+				renderer.setClearColor( this.clearColor, this.clearAlpha );
+
+			}
+
+			if ( this.clearDepth ) {
+
+				renderer.clearDepth();
+
+			}
+
+			renderer.setRenderTarget( this.renderToScreen ? null : readBuffer ); // TODO: Avoid using autoClear properties, see https://github.com/mrdoob/three.js/pull/15571#issuecomment-465669600
+
+			if ( this.clear ) renderer.clear( renderer.autoClearColor, renderer.autoClearDepth, renderer.autoClearStencil );
+			renderer.render( this.scene, this.camera );
+
+			if ( this.clearColor ) {
+
+				renderer.setClearColor( this._oldClearColor, oldClearAlpha );
+
+			}
+
+			if ( this.overrideMaterial !== undefined ) {
+
+				this.scene.overrideMaterial = oldOverrideMaterial;
+
+			}
+
+			renderer.autoClear = oldAutoClear;
+
+		}
+
+	}
+
+	THREE.RenderPass = RenderPass;
+
+} )();
+</script>
+<script>( function () {
+
+	class ShaderPass extends THREE.Pass {
+
+		constructor( shader, textureID ) {
+
+			super();
+			this.textureID = textureID !== undefined ? textureID : 'tDiffuse';
+
+			if ( shader instanceof THREE.ShaderMaterial ) {
+
+				this.uniforms = shader.uniforms;
+				this.material = shader;
+
+			} else if ( shader ) {
+
+				this.uniforms = THREE.UniformsUtils.clone( shader.uniforms );
+				this.material = new THREE.ShaderMaterial( {
+					defines: Object.assign( {}, shader.defines ),
+					uniforms: this.uniforms,
+					vertexShader: shader.vertexShader,
+					fragmentShader: shader.fragmentShader
+				} );
+
+			}
+
+			this.fsQuad = new THREE.FullScreenQuad( this.material );
+
+		}
+
+		render( renderer, writeBuffer, readBuffer
+			/*, deltaTime, maskActive */
+		) {
+
+			if ( this.uniforms[ this.textureID ] ) {
+
+				this.uniforms[ this.textureID ].value = readBuffer.texture;
+
+			}
+
+			this.fsQuad.material = this.material;
+
+			if ( this.renderToScreen ) {
+
+				renderer.setRenderTarget( null );
+				this.fsQuad.render( renderer );
+
+			} else {
+
+				renderer.setRenderTarget( writeBuffer ); // TODO: Avoid using autoClear properties, see https://github.com/mrdoob/three.js/pull/15571#issuecomment-465669600
+
+				if ( this.clear ) renderer.clear( renderer.autoClearColor, renderer.autoClearDepth, renderer.autoClearStencil );
+				this.fsQuad.render( renderer );
+
+			}
+
+		}
+
+	}
+
+	THREE.ShaderPass = ShaderPass;
+
+} )();
+</script>
+<script>( function () {
+
+	/**
+ * UnrealBloomPass is inspired by the bloom pass of Unreal Engine. It creates a
+ * mip map chain of bloom textures and blurs them with different radii. Because
+ * of the weighted combination of mips, and because larger blurs are done on
+ * higher mips, this effect provides good quality and performance.
+ *
+ * Reference:
+ * - https://docs.unrealengine.com/latest/INT/Engine/Rendering/PostProcessEffects/Bloom/
+ */
+
+	class UnrealBloomPass extends THREE.Pass {
+
+		constructor( resolution, strength, radius, threshold ) {
+
+			super();
+			this.strength = strength !== undefined ? strength : 1;
+			this.radius = radius;
+			this.threshold = threshold;
+			this.resolution = resolution !== undefined ? new THREE.Vector2( resolution.x, resolution.y ) : new THREE.Vector2( 256, 256 ); // create color only once here, reuse it later inside the render function
+
+			this.clearColor = new THREE.Color( 0, 0, 0 ); // render targets
+
+			const pars = {
+				minFilter: THREE.LinearFilter,
+				magFilter: THREE.LinearFilter,
+				format: THREE.RGBAFormat
+			};
+			this.renderTargetsHorizontal = [];
+			this.renderTargetsVertical = [];
+			this.nMips = 5;
+			let resx = Math.round( this.resolution.x / 2 );
+			let resy = Math.round( this.resolution.y / 2 );
+			this.renderTargetBright = new THREE.WebGLRenderTarget( resx, resy, pars );
+			this.renderTargetBright.texture.name = 'UnrealBloomPass.bright';
+			this.renderTargetBright.texture.generateMipmaps = false;
+
+			for ( let i = 0; i < this.nMips; i ++ ) {
+
+				const renderTargetHorizonal = new THREE.WebGLRenderTarget( resx, resy, pars );
+				renderTargetHorizonal.texture.name = 'UnrealBloomPass.h' + i;
+				renderTargetHorizonal.texture.generateMipmaps = false;
+				this.renderTargetsHorizontal.push( renderTargetHorizonal );
+				const renderTargetVertical = new THREE.WebGLRenderTarget( resx, resy, pars );
+				renderTargetVertical.texture.name = 'UnrealBloomPass.v' + i;
+				renderTargetVertical.texture.generateMipmaps = false;
+				this.renderTargetsVertical.push( renderTargetVertical );
+				resx = Math.round( resx / 2 );
+				resy = Math.round( resy / 2 );
+
+			} // luminosity high pass material
+
+
+			if ( THREE.LuminosityHighPassShader === undefined ) console.error( 'THREE.UnrealBloomPass relies on THREE.LuminosityHighPassShader' );
+			const highPassShader = THREE.LuminosityHighPassShader;
+			this.highPassUniforms = THREE.UniformsUtils.clone( highPassShader.uniforms );
+			this.highPassUniforms[ 'luminosityThreshold' ].value = threshold;
+			this.highPassUniforms[ 'smoothWidth' ].value = 0.01;
+			this.materialHighPassFilter = new THREE.ShaderMaterial( {
+				uniforms: this.highPassUniforms,
+				vertexShader: highPassShader.vertexShader,
+				fragmentShader: highPassShader.fragmentShader,
+				defines: {}
+			} ); // Gaussian Blur Materials
+
+			this.separableBlurMaterials = [];
+			const kernelSizeArray = [ 3, 5, 7, 9, 11 ];
+			resx = Math.round( this.resolution.x / 2 );
+			resy = Math.round( this.resolution.y / 2 );
+
+			for ( let i = 0; i < this.nMips; i ++ ) {
+
+				this.separableBlurMaterials.push( this.getSeperableBlurMaterial( kernelSizeArray[ i ] ) );
+				this.separableBlurMaterials[ i ].uniforms[ 'texSize' ].value = new THREE.Vector2( resx, resy );
+				resx = Math.round( resx / 2 );
+				resy = Math.round( resy / 2 );
+
+			} // Composite material
+
+
+			this.compositeMaterial = this.getCompositeMaterial( this.nMips );
+			this.compositeMaterial.uniforms[ 'blurTexture1' ].value = this.renderTargetsVertical[ 0 ].texture;
+			this.compositeMaterial.uniforms[ 'blurTexture2' ].value = this.renderTargetsVertical[ 1 ].texture;
+			this.compositeMaterial.uniforms[ 'blurTexture3' ].value = this.renderTargetsVertical[ 2 ].texture;
+			this.compositeMaterial.uniforms[ 'blurTexture4' ].value = this.renderTargetsVertical[ 3 ].texture;
+			this.compositeMaterial.uniforms[ 'blurTexture5' ].value = this.renderTargetsVertical[ 4 ].texture;
+			this.compositeMaterial.uniforms[ 'bloomStrength' ].value = strength;
+			this.compositeMaterial.uniforms[ 'bloomRadius' ].value = 0.1;
+			this.compositeMaterial.needsUpdate = true;
+			const bloomFactors = [ 1.0, 0.8, 0.6, 0.4, 0.2 ];
+			this.compositeMaterial.uniforms[ 'bloomFactors' ].value = bloomFactors;
+			this.bloomTintColors = [ new THREE.Vector3( 1, 1, 1 ), new THREE.Vector3( 1, 1, 1 ), new THREE.Vector3( 1, 1, 1 ), new THREE.Vector3( 1, 1, 1 ), new THREE.Vector3( 1, 1, 1 ) ];
+			this.compositeMaterial.uniforms[ 'bloomTintColors' ].value = this.bloomTintColors; // copy material
+
+			if ( THREE.CopyShader === undefined ) {
+
+				console.error( 'THREE.UnrealBloomPass relies on THREE.CopyShader' );
+
+			}
+
+			const copyShader = THREE.CopyShader;
+			this.copyUniforms = THREE.UniformsUtils.clone( copyShader.uniforms );
+			this.copyUniforms[ 'opacity' ].value = 1.0;
+			this.materialCopy = new THREE.ShaderMaterial( {
+				uniforms: this.copyUniforms,
+				vertexShader: copyShader.vertexShader,
+				fragmentShader: copyShader.fragmentShader,
+				blending: THREE.AdditiveBlending,
+				depthTest: false,
+				depthWrite: false,
+				transparent: true
+			} );
+			this.enabled = true;
+			this.needsSwap = false;
+			this._oldClearColor = new THREE.Color();
+			this.oldClearAlpha = 1;
+			this.basic = new THREE.MeshBasicMaterial();
+			this.fsQuad = new THREE.FullScreenQuad( null );
+
+		}
+
+		dispose() {
+
+			for ( let i = 0; i < this.renderTargetsHorizontal.length; i ++ ) {
+
+				this.renderTargetsHorizontal[ i ].dispose();
+
+			}
+
+			for ( let i = 0; i < this.renderTargetsVertical.length; i ++ ) {
+
+				this.renderTargetsVertical[ i ].dispose();
+
+			}
+
+			this.renderTargetBright.dispose();
+
+		}
+
+		setSize( width, height ) {
+
+			let resx = Math.round( width / 2 );
+			let resy = Math.round( height / 2 );
+			this.renderTargetBright.setSize( resx, resy );
+
+			for ( let i = 0; i < this.nMips; i ++ ) {
+
+				this.renderTargetsHorizontal[ i ].setSize( resx, resy );
+				this.renderTargetsVertical[ i ].setSize( resx, resy );
+				this.separableBlurMaterials[ i ].uniforms[ 'texSize' ].value = new THREE.Vector2( resx, resy );
+				resx = Math.round( resx / 2 );
+				resy = Math.round( resy / 2 );
+
+			}
+
+		}
+
+		render( renderer, writeBuffer, readBuffer, deltaTime, maskActive ) {
+
+			renderer.getClearColor( this._oldClearColor );
+			this.oldClearAlpha = renderer.getClearAlpha();
+			const oldAutoClear = renderer.autoClear;
+			renderer.autoClear = false;
+			renderer.setClearColor( this.clearColor, 0 );
+			if ( maskActive ) renderer.state.buffers.stencil.setTest( false ); // Render input to screen
+
+			if ( this.renderToScreen ) {
+
+				this.fsQuad.material = this.basic;
+				this.basic.map = readBuffer.texture;
+				renderer.setRenderTarget( null );
+				renderer.clear();
+				this.fsQuad.render( renderer );
+
+			} // 1. Extract Bright Areas
+
+
+			this.highPassUniforms[ 'tDiffuse' ].value = readBuffer.texture;
+			this.highPassUniforms[ 'luminosityThreshold' ].value = this.threshold;
+			this.fsQuad.material = this.materialHighPassFilter;
+			renderer.setRenderTarget( this.renderTargetBright );
+			renderer.clear();
+			this.fsQuad.render( renderer ); // 2. Blur All the mips progressively
+
+			let inputRenderTarget = this.renderTargetBright;
+
+			for ( let i = 0; i < this.nMips; i ++ ) {
+
+				this.fsQuad.material = this.separableBlurMaterials[ i ];
+				this.separableBlurMaterials[ i ].uniforms[ 'colorTexture' ].value = inputRenderTarget.texture;
+				this.separableBlurMaterials[ i ].uniforms[ 'direction' ].value = UnrealBloomPass.BlurDirectionX;
+				renderer.setRenderTarget( this.renderTargetsHorizontal[ i ] );
+				renderer.clear();
+				this.fsQuad.render( renderer );
+				this.separableBlurMaterials[ i ].uniforms[ 'colorTexture' ].value = this.renderTargetsHorizontal[ i ].texture;
+				this.separableBlurMaterials[ i ].uniforms[ 'direction' ].value = UnrealBloomPass.BlurDirectionY;
+				renderer.setRenderTarget( this.renderTargetsVertical[ i ] );
+				renderer.clear();
+				this.fsQuad.render( renderer );
+				inputRenderTarget = this.renderTargetsVertical[ i ];
+
+			} // Composite All the mips
+
+
+			this.fsQuad.material = this.compositeMaterial;
+			this.compositeMaterial.uniforms[ 'bloomStrength' ].value = this.strength;
+			this.compositeMaterial.uniforms[ 'bloomRadius' ].value = this.radius;
+			this.compositeMaterial.uniforms[ 'bloomTintColors' ].value = this.bloomTintColors;
+			renderer.setRenderTarget( this.renderTargetsHorizontal[ 0 ] );
+			renderer.clear();
+			this.fsQuad.render( renderer ); // Blend it additively over the input texture
+
+			this.fsQuad.material = this.materialCopy;
+			this.copyUniforms[ 'tDiffuse' ].value = this.renderTargetsHorizontal[ 0 ].texture;
+			if ( maskActive ) renderer.state.buffers.stencil.setTest( true );
+
+			if ( this.renderToScreen ) {
+
+				renderer.setRenderTarget( null );
+				this.fsQuad.render( renderer );
+
+			} else {
+
+				renderer.setRenderTarget( readBuffer );
+				this.fsQuad.render( renderer );
+
+			} // Restore renderer settings
+
+
+			renderer.setClearColor( this._oldClearColor, this.oldClearAlpha );
+			renderer.autoClear = oldAutoClear;
+
+		}
+
+		getSeperableBlurMaterial( kernelRadius ) {
+
+			return new THREE.ShaderMaterial( {
+				defines: {
+					'KERNEL_RADIUS': kernelRadius,
+					'SIGMA': kernelRadius
+				},
+				uniforms: {
+					'colorTexture': {
+						value: null
+					},
+					'texSize': {
+						value: new THREE.Vector2( 0.5, 0.5 )
+					},
+					'direction': {
+						value: new THREE.Vector2( 0.5, 0.5 )
+					}
+				},
+				vertexShader: `varying vec2 vUv;
+				void main() {
+					vUv = uv;
+					gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+				}`,
+				fragmentShader: `#include <common>
+				varying vec2 vUv;
+				uniform sampler2D colorTexture;
+				uniform vec2 texSize;
+				uniform vec2 direction;
+
+				float gaussianPdf(in float x, in float sigma) {
+					return 0.39894 * exp( -0.5 * x * x/( sigma * sigma))/sigma;
+				}
+				void main() {
+					vec2 invSize = 1.0 / texSize;
+					float fSigma = float(SIGMA);
+					float weightSum = gaussianPdf(0.0, fSigma);
+					vec3 diffuseSum = texture2D( colorTexture, vUv).rgb * weightSum;
+					for( int i = 1; i < KERNEL_RADIUS; i ++ ) {
+						float x = float(i);
+						float w = gaussianPdf(x, fSigma);
+						vec2 uvOffset = direction * invSize * x;
+						vec3 sample1 = texture2D( colorTexture, vUv + uvOffset).rgb;
+						vec3 sample2 = texture2D( colorTexture, vUv - uvOffset).rgb;
+						diffuseSum += (sample1 + sample2) * w;
+						weightSum += 2.0 * w;
+					}
+					gl_FragColor = vec4(diffuseSum/weightSum, 1.0);
+				}`
+			} );
+
+		}
+
+		getCompositeMaterial( nMips ) {
+
+			return new THREE.ShaderMaterial( {
+				defines: {
+					'NUM_MIPS': nMips
+				},
+				uniforms: {
+					'blurTexture1': {
+						value: null
+					},
+					'blurTexture2': {
+						value: null
+					},
+					'blurTexture3': {
+						value: null
+					},
+					'blurTexture4': {
+						value: null
+					},
+					'blurTexture5': {
+						value: null
+					},
+					'dirtTexture': {
+						value: null
+					},
+					'bloomStrength': {
+						value: 1.0
+					},
+					'bloomFactors': {
+						value: null
+					},
+					'bloomTintColors': {
+						value: null
+					},
+					'bloomRadius': {
+						value: 0.0
+					}
+				},
+				vertexShader: `varying vec2 vUv;
+				void main() {
+					vUv = uv;
+					gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+				}`,
+				fragmentShader: `varying vec2 vUv;
+				uniform sampler2D blurTexture1;
+				uniform sampler2D blurTexture2;
+				uniform sampler2D blurTexture3;
+				uniform sampler2D blurTexture4;
+				uniform sampler2D blurTexture5;
+				uniform sampler2D dirtTexture;
+				uniform float bloomStrength;
+				uniform float bloomRadius;
+				uniform float bloomFactors[NUM_MIPS];
+				uniform vec3 bloomTintColors[NUM_MIPS];
+
+				float lerpBloomFactor(const in float factor) {
+					float mirrorFactor = 1.2 - factor;
+					return mix(factor, mirrorFactor, bloomRadius);
+				}
+
+				void main() {
+					gl_FragColor = bloomStrength * ( lerpBloomFactor(bloomFactors[0]) * vec4(bloomTintColors[0], 1.0) * texture2D(blurTexture1, vUv) +
+						lerpBloomFactor(bloomFactors[1]) * vec4(bloomTintColors[1], 1.0) * texture2D(blurTexture2, vUv) +
+						lerpBloomFactor(bloomFactors[2]) * vec4(bloomTintColors[2], 1.0) * texture2D(blurTexture3, vUv) +
+						lerpBloomFactor(bloomFactors[3]) * vec4(bloomTintColors[3], 1.0) * texture2D(blurTexture4, vUv) +
+						lerpBloomFactor(bloomFactors[4]) * vec4(bloomTintColors[4], 1.0) * texture2D(blurTexture5, vUv) );
+				}`
+			} );
+
+		}
+
+	}
+
+	UnrealBloomPass.BlurDirectionX = new THREE.Vector2( 1.0, 0.0 );
+	UnrealBloomPass.BlurDirectionY = new THREE.Vector2( 0.0, 1.0 );
+
+	THREE.UnrealBloomPass = UnrealBloomPass;
+
+} )();
+</script>
 <script>
 (() => {
 'use strict';
@@ -1773,7 +2685,7 @@ function deliver(o){
 /* ================= STARS & PLANETS (SPACE) ================= */
 const starObjs = {}, planetObjs = {};
 const starRadius = d => W*lerp(STAR_TYPES[d.type].size[0], STAR_TYPES[d.type].size[1], d.size);
-const planetRadius = d => W*lerp(PLANET_TYPES[d.type].size[0], PLANET_TYPES[d.type].size[1], d.size);
+const planetRadius = d => (d.molten&&d.molten.r) ? d.molten.r : W*lerp(PLANET_TYPES[d.type].size[0], PLANET_TYPES[d.type].size[1], d.size);
 const moonCount = d => Array.isArray(d.moons) ? d.moons.length : (typeof d.moons==='number' ? d.moons : (d.moon?1:0));
 const moonDistI = (d,i) => planetRadius(d)*2.2*(1+.35*i)+20;
 const planetExtent = d => { const r=planetRadius(d), nm=moonCount(d); return Math.max(nm?moonDistI(d,nm-1)+r*.6+5:r, d.rings?r*2.3:r); };
@@ -2202,6 +3114,65 @@ function endWar(d,w,win,lose){
 }
 function warAssets(d,n){ let camps=0, bases=0; for (const b of d.buildings){ if (b.type!=='camp' && b.type!=='airbase') continue; if (nationAt(d,dirOf(b))===n){ if (b.type==='camp') camps++; else bases++; } } return {camps,bases}; }
 const nationVec = n => new V3(n.dir[0],n.dir[1],n.dir[2]);
+function warNews(d,w,text,major){ (w.log=w.log||[]).unshift(text); if (w.log.length>6) w.log.length=6; if (major) logWar(text+` (${d.name})`); if (major || (visit && visit.id===d.id)) toast(major?`${d.name}: ${text}`:text, !!major); }
+function frontPlace(d,mid){
+  let best=null, bd=1e9; for (const b of d.buildings){ if ((b.type!=='city'&&b.type!=='capital')||!b.name) continue; const a=angBetween(dirOf(b),mid); if (a<bd){ bd=a; best=b; } }
+  if (best && bd*surfR(d)<30) return best.name;
+  const T=d.type, terr=T==='ocean'?['the coast','the islands','the straits']:T==='ice'?['the glaciers','the frozen pass']:T==='desert'?['the dunes','the oasis']:T==='jungle'?['the rainforest','the river delta']:['the hills','the plains','the river','the mountain pass'];
+  return pickOne(terr);
+}
+function warWeather(d){ return d.type==='ice'?'blizzard':d.type==='desert'?'sandstorm':d.type==='ocean'||d.type==='jungle'?'monsoon':d.type==='lava'?'ash storm':pickOne(['storm','heavy fog','flood']); }
+function warEvents(d,w,a,b,step,bal,mid){
+  const c=d.civ; if (w.evT===undefined) w.evT=14+Math.random()*16;
+  if (w.surge){ w.surge.t-=step; if (w.surge.t<=0) w.surge=null; }
+  if (w.lull>0) w.lull-=step;
+  w.evT-=step; if (w.evT>0) return; w.evT=20+Math.random()*28;
+  const side=Math.random()<.5+bal*.35?a:b, foe=side===a?b:a, place=frontPlace(d,mid);
+  const pool=['offensive','offensive','ambush','reinforce','weather','desert','artillery'];
+  if (c.era>=5 && (side.jets||0)>0) pool.push('raid','raid');
+  if (!S.endless && w.t>90) pool.push('talks');
+  switch (pickOne(pool)){
+    case 'offensive': w.surge={id:side.id,k:1.5,t:18}; warNews(d,w,`${side.name} launched an offensive near ${place}.`); break;
+    case 'artillery': { const l=foe.army*(.04+Math.random()*.05); foe.army-=l; side.st.k+=l; w.kills+=l; foe.morale=Math.max(0,(foe.morale??1)-.04); warNews(d,w,`${side.name} shelled ${foe.name}'s trenches at ${place}. ${Math.round(l)} fell.`); w.barrage={id:side.id,t:6}; break; }
+    case 'ambush': { const l=foe.army*(.06+Math.random()*.07); foe.army-=l; side.st.k+=l; w.kills+=l; warNews(d,w,`${side.name} ambushed a ${foe.name} supply column near ${place}. ${Math.round(l)} lost.`); break; }
+    case 'reinforce': side.army*=1.18; warNews(d,w,`Fresh ${side.name} troops reached the front.`); break;
+    case 'weather': w.lull=14; warNews(d,w,`A ${warWeather(d)} stopped the fighting near ${place}.`); break;
+    case 'desert': foe.morale=Math.max(0,(foe.morale??1)-.1); foe.army*=.95; warNews(d,w,`${foe.name} soldiers are deserting.`); break;
+    case 'raid': { const tg=d.buildings.filter(x=>x.type!=='pad'&&x.type!=='tree'&&nationAt(d,dirOf(x))===foe); if (!tg.length) break;
+      const t=tg.find(x=>POLLUTERS[x.type])||pickOne(tg), nm=(BUILDINGS[t.type]||{}).name||t.type;
+      if (t.type==='capital'){ warNews(d,w,`${side.name} jets bombed the outskirts of ${t.name}.`); c.pop=Math.max(2,c.pop-1); break; }
+      d.buildings=d.buildings.filter(x=>x!==t); w.razed=(w.razed||0)+1; c.pop=Math.max(2,c.pop-1.2); w.civ=(w.civ||0)+Math.round(2+Math.random()*6);
+      if (visit && visit.id===d.id){ removeBuildingObj(t.id); if (visit.vill) (visit.vill.ruins=visit.vill.ruins||[]).push(dirOf(t)); }
+      warNews(d,w,`${side.name} jets bombed ${foe.name}'s ${nm.toLowerCase()}${t.name?' in '+t.name:''}.`, true); break; }
+    case 'talks': if ((a.morale??1)<.6 && (b.morale??1)<.6 && Math.random()<.55){ warNews(d,w,`Peace talks between ${a.name} and ${b.name} succeeded.`, true); endWar(d,w,null,null); }
+      else warNews(d,w,`Peace talks between ${a.name} and ${b.name} collapsed.`); break;
+  }
+}
+function captureCities(d,w,a,b,mid){
+  const c=d.civ, R=surfR(d); w.siege=null;
+  for (const bd of d.buildings){
+    if ((bd.type!=='city'&&bd.type!=='capital') || (bd.nation!==a.id && bd.nation!==b.id)) continue;
+    const dir=dirOf(bd);
+    if (bd.type==='capital' && angBetween(dir,mid)*R<16) w.siege=bd.name;
+    const own=nationAt(d,dir,true); if (!own || own.border || own.n.id===bd.nation || (own.n!==a && own.n!==b)) continue;
+    const win=own.n, lose=win===a?b:a, cap=bd.type==='capital';
+    bd.nation=win.id; w.caps=(w.caps||0)+1; c.pop=Math.max(2,c.pop-1.5); w.civ=(w.civ||0)+Math.round(3+Math.random()*8);
+    if (visit && visit.id===d.id && visit.vill) (visit.vill.ruins=visit.vill.ruins||[]).push(dir);
+    if (cap){ bd.type='city'; if (visit && visit.id===d.id){ removeBuildingObj(bd.id); addBuildingObj(bd,true); }
+      warNews(d,w,`${win.name} stormed ${lose.name}'s capital ${bd.name}! ${lose.name} has fallen.`, true); w.fall=true; endWar(d,w,win,lose); return; }
+    warNews(d,w,`${win.name} captured ${bd.name} from ${lose.name}.`, true);
+    if (visit && visit.id===d.id && visit.nationView) refreshNationView();
+  }
+}
+function warPhase(d,w,A,B){
+  if (w.t<12) return 'Armies are mobilizing';
+  if (w.lull>0) return 'Fighting paused by bad weather';
+  if (w.siege) return `Siege of ${w.siege}`;
+  if (w.surge){ const n=w.surge.id===A.id?A:B; return `${n.name} offensive under way`; }
+  const sa=(A.army||0)*(A.morale??1), sb2=(B.army||0)*(B.morale??1), bal=(sa-sb2)/(sa+sb2+1e-6);
+  if (Math.abs(bal)<.15) return 'Stalemate: both sides are dug into trenches';
+  return `${(bal>0?A:B).name} is pushing the front forward`;
+}
 function stepWar(d,w,dt,spd){
   const c=d.civ, a=c.nations.find(n=>n.id===w.a), b=c.nations.find(n=>n.id===w.b);
   if (!a||!b){ c.wars=c.wars.filter(x=>x!==w); return; }
@@ -2215,10 +3186,12 @@ function stepWar(d,w,dt,spd){
   const asA=warAssets(d,a), asB=warAssets(d,b);
   a.jets=c.era>=5?Math.min(6,1+Math.round(a.army/25)+2*asA.bases):0; b.jets=c.era>=5?Math.min(6,1+Math.round(b.army/25)+2*asB.bases):0;
   const gear=(n,as)=>(1+.12*Math.min(4,as.camps))*(1+.08*Math.min(3,as.bases))*(1+.04*(n.jets||0));
-  const effA=gear(a,asA)*(a.army/wcount(a))*tech*(a.tech||1)*Math.pow(a.boost||1,1.6)*(.5+.5*a.morale)*sup(da)*(1+.4*(a.mob-1));
-  const effB=gear(b,asB)*(b.army/wcount(b))*tech*(b.tech||1)*Math.pow(b.boost||1,1.6)*(.5+.5*b.morale)*sup(db)*(1+.4*(b.mob-1))*(1.15+hill);
+  let effA=gear(a,asA)*(a.army/wcount(a))*tech*(a.tech||1)*Math.pow(a.boost||1,1.6)*(.5+.5*a.morale)*sup(da)*(1+.4*(a.mob-1));
+  let effB=gear(b,asB)*(b.army/wcount(b))*tech*(b.tech||1)*Math.pow(b.boost||1,1.6)*(.5+.5*b.morale)*sup(db)*(1+.4*(b.mob-1))*(1.15+hill);
+  if (w.surge){ if (w.surge.id===a.id) effA*=w.surge.k; else if (w.surge.id===b.id) effB*=w.surge.k; }
+  const lull=w.lull>0?.2:1;
   // Lanchester-style attrition: each side's losses grow with the other side's effective strength
-  const ca=Math.min(a.army*.05*step, effB*.005*step*(.6+Math.random()*.8)), cb=Math.min(b.army*.05*step, effA*.005*step*(.6+Math.random()*.8));
+  const ca=lull*Math.min(a.army*.05*step, effB*.005*step*(.6+Math.random()*.8)), cb=lull*Math.min(b.army*.05*step, effA*.005*step*(.6+Math.random()*.8));
   a.army-=ca; b.army-=cb; a.st.k+=cb; b.st.k+=ca; w.kills+=ca+cb; w.ca=(w.ca||0)+ca; w.cb=(w.cb||0)+cb;
   c.pop=Math.max(2,c.pop-(ca+cb)*.08); a.share=Math.max(.12,a.share-ca*.002); b.share=Math.max(.12,b.share-cb*.002);
   if (visit && visit.id===d.id && visit.vill) visit.vill.deaths=(visit.vill.deaths||0)+ca+cb;
@@ -2236,6 +3209,8 @@ function stepWar(d,w,dt,spd){
     const bd=near[Math.floor(Math.random()*near.length)]; d.buildings=d.buildings.filter(x=>x!==bd); w.razed=(w.razed||0)+1; c.pop=Math.max(2,c.pop-.6);
     if (visit && visit.id===d.id){ removeBuildingObj(bd.id); if (visit.vill) (visit.vill.ruins=visit.vill.ruins||[]).push(dirOf(bd)); }
   }
+  warEvents(d,w,a,b,step,bal,mid); if (!c.wars.includes(w)) return;
+  w.capT=(w.capT||0)-step; if (w.capT<=0){ w.capT=1.5; captureCities(d,w,a,b,mid); if (!c.wars.includes(w)) return; }
   // news from the front
   for (const [n,key] of [[a,'wa'],[b,'wb']]){ if (!w[key] && n.morale<.4){ w[key]=1; toast(`${n.name}'s soldiers are losing heart on ${d.name}.`); } }
   const aBroke=endless ? (a.army<3&&w.t>25) : (w.t>25&&a.morale<.15)||a.army<Math.max(3,w.a0*.15)&&w.t>25, bBroke=endless ? (b.army<3&&w.t>25) : (w.t>25&&b.morale<.15)||b.army<Math.max(3,w.b0*.15)&&w.t>25;
@@ -2295,7 +3270,7 @@ function renderWarModal(){
   else h+='<p class="sm" style="margin:0">This world needs a second nation before a war can start.</p>';
   h+=N.map(n=>{ const w=c.wars.find(x=>x.a===n.id||x.b===n.id); return `<div class="lbrow"><i style="background:${n.color}"></i><div class="grow"><p>${esc(n.name)} <small>${esc(WILD[n.race][4])}s${w?' · <span class="warr">at war</span>':''}</small></p><p class="sm">Army ${Math.round(n.army||0)} · Morale ${Math.round((n.morale??1)*100)}%</p></div><div class="rowi" style="gap:4px;flex-wrap:wrap;justify-content:flex-end"><button class="btn" type="button" data-wpow="${n.id}" data-d="-1">&minus;</button><span class="sm" style="min-width:58px;text-align:center">Power &times;${(n.boost||1).toFixed(2).replace(/\.?0+$/,'')}</span><button class="btn" type="button" data-wpow="${n.id}" data-d="1">+</button><button class="btn" type="button" data-wtroop="${n.id}">+20 troops</button><button class="btn" type="button" data-wmob="${n.id}">${(n.mob||1)>1?'Stand down':'Mobilize'}</button></div></div>`; }).join('');
   (c.annexedList||[]).forEach((r,i)=>{ const by=N.find(n=>n.id===r.byId); h+=`<div class="lbrow"><i style="background:${r.n.color}"></i><div class="grow"><p>${esc(r.n.name)} <small>annexed${by?' by '+esc(by.name):''}</small></p></div><button class="btn" type="button" data-wmfree="${i}">Unannex</button></div>`; });
-  c.wars.forEach(w=>{ const A=N.find(n=>n.id===w.a), B=N.find(n=>n.id===w.b); if (!A||!B) return; h+=`<div class="lbrow"><div class="grow"><p><span class="warr">${esc(A.name)}</span> vs <span class="warr">${esc(B.name)}</span></p><p class="sm">${Math.round(w.kills)} fallen${w.razed?' · '+w.razed+' buildings razed':''}</p></div><button class="btn" type="button" data-wmpeace="${w.id}">Make peace</button></div>`; });
+  c.wars.forEach(w=>{ const A=N.find(n=>n.id===w.a), B=N.find(n=>n.id===w.b); if (!A||!B) return; h+=`<div class="lbrow"><div class="grow"><p><span class="warr">${esc(A.name)}</span> vs <span class="warr">${esc(B.name)}</span></p><p class="sm">${Math.round(w.kills)} soldiers fallen${w.civ?' · '+w.civ+' civilians':''}${w.razed?' · '+w.razed+' buildings razed':''}${w.caps?' · '+w.caps+' cities taken':''}</p><p class="sm" style="color:var(--ink);font-weight:800">${esc(warPhase(d,w,A,B))}</p>${(w.log||[]).slice(0,3).map(t=>`<p class="sm">• ${esc(t)}</p>`).join('')}</div><button class="btn" type="button" data-wmpeace="${w.id}">Make peace</button></div>`; });
   if (box.contains(document.activeElement) && document.activeElement.tagName==='SELECT') return;
   box.innerHTML=h;
   $('#wmWorld').onchange=e=>{ warWorld=e.target.value; warSel.a=warSel.b=null; renderWarModal(); };
@@ -2368,17 +3343,48 @@ const debrisSims=[];
 const _cm=new THREE.Matrix4(), _cq=new THREE.Quaternion(), _cs=new V3(), _cp=new V3(), _cc=new THREE.Color();
 const bodyRadius = w => w.isMoon ? Math.max(.35,planetRadius(parentOf(w)||w)*.27) : planetRadius(w);
 function crashObj(c){ if (!c.small.isMoon){ const o=planetObjs[c.small.id]; return o?o.g:null; } const po=planetObjs[c.big.id], i=c.big.moons?c.big.moons.indexOf(c.small):-1; return po&&po.g.userData.moonPivot&&i>=0?po.g.userData.moonPivot.children[i]:null; }
+const quakeFx=[], _HOT=new THREE.Color(0xff6a14), _WHITE=new THREE.Color(0xfff2d0), _Z=new V3(0,0,1), _cp2=new V3();
 function makeDebris(P,n,big,small,rb,rs){
-  const N=260, geo=new THREE.IcosahedronGeometry(1,0), mat=new THREE.MeshBasicMaterial({color:0xffffff});
+  // rocks are simulated in the big body's frame and pulled by its gravity: most fall back as glowing rain,
+  // fast ones escape, and some are flung sideways into a short-lived debris ring
+  const N=360, geo=new THREE.IcosahedronGeometry(1,0), mat=new THREE.MeshBasicMaterial({color:0xffffff});
   const im=new THREE.InstancedMesh(geo,mat,N); im.frustumCulled=false;
-  const pos=[], vel=[], sc=[], heat=[], base=[], cb=new THREE.Color(big.color), cs2=new THREE.Color(small.color);
+  const GM=.3*rb*rb*rb, t1=new V3().crossVectors(n,Math.abs(n.y)<.9?new V3(0,1,0):new V3(1,0,0)).normalize(), t2=new V3().crossVectors(n,t1);
+  const pos=[], vel=[], sc=[], heat=[], base=[], ax=[], ang=[], spin=[], cb=new THREE.Color(big.color), cs2=new THREE.Color(small.color);
   for (let i=0;i<N;i++){
-    const r=randomDir(Math.random), dir=n.clone().multiplyScalar(.9).addScaledVector(r,.95).normalize(), sp=rb*(.25+Math.random()*1.1);
-    pos.push(P.clone().addScaledVector(r,rb*.12*Math.random())); vel.push(dir.multiplyScalar(sp));
-    sc.push(Math.max(.8,rs*(.015+Math.random()*.1))); heat.push(.6+Math.random()*.4);
-    const c=(Math.random()<.5?cb:cs2).clone().multiplyScalar(.55); base.push(c); im.setColorAt(i,c);
+    const r=randomDir(Math.random); let v;
+    if (i%4===0){ const a=Math.random()*6.283, tg=t1.clone().multiplyScalar(Math.cos(a)).addScaledVector(t2,Math.sin(a));
+      v=n.clone().multiplyScalar(rb*(.08+Math.random()*.14)).addScaledVector(tg,rb*(.5+Math.random()*.17)); }
+    else { const dir=n.clone().multiplyScalar(1).addScaledVector(r,.75).normalize(); v=dir.multiplyScalar(rb*(.18+Math.random()*(Math.random()<.15?.9:.55))); }
+    const p0=n.clone().multiplyScalar(rb*1.02).addScaledVector(r,rs*.35*Math.random()); if (p0.length()<rb*1.01) p0.setLength(rb*1.02);
+    pos.push(p0); vel.push(v);
+    sc.push(Math.max(.6,rs*(.012+Math.pow(Math.random(),2.5)*.11))); heat.push(.75+Math.random()*.25);
+    const c=(Math.random()<.5?cb:cs2).clone().multiplyScalar(.35+Math.random()*.25); base.push(c); im.setColorAt(i,c);
+    ax.push(randomDir(Math.random)); ang.push(Math.random()*6); spin.push(.5+Math.random()*4);
   }
-  scene.add(im); debrisSims.push({im,pos,vel,sc,heat,base,t:0,N});
+  scene.add(im); debrisSims.push({im,pos,vel,sc,heat,base,ax,ang,spin,landed:new Uint8Array(N),t:0,N,GM,rb,big:big.id,ctr:(worldPos(big.id,new V3())||new V3())});
+}
+function addQuake(big,n,rb){
+  // seismic + air shockwaves: rings that sweep across the whole planet and meet again on the far side
+  [[1.012,.45,0xffd9a0,.9],[1.05,.8,0x9fd8ff,.5],[1.004,.3,0xff7a30,.8]].forEach(([k,spd,col,op],i) => {
+    const m=new THREE.Mesh(new THREE.RingGeometry(.975,1,128),new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
+    m.quaternion.setFromUnitVectors(_Z,n); scene.add(m); quakeFx.push({kind:'ring',m,big:big.id,n:n.clone(),rb:rb*k,spd,op,t:-i*.35,life:9});
+  });
+  const glow=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0xff5a14,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,fog:false,opacity:0}));
+  scene.add(glow); quakeFx.push({kind:'glow',m:glow,big:big.id,n:n.clone(),rb,t:0,life:22});
+  const fl=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0xffffff,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,fog:false}));
+  scene.add(fl); quakeFx.push({kind:'flash',m:fl,big:big.id,n:n.clone(),rb,t:0,life:1.1});
+}
+function updateQuakes(rdt){
+  for (let i=quakeFx.length-1;i>=0;i--){ const q=quakeFx[i]; q.t+=rdt*Math.max(.5,simScale);
+    const ctr=worldPos(q.big,_cp2); if (q.t>q.life || !ctr){ scene.remove(q.m); disposeTree(q.m); quakeFx.splice(i,1); continue; }
+    if (q.kind==='ring'){ if (q.t<0){ q.m.visible=false; continue; } q.m.visible=true;
+      const th=Math.min(Math.PI*.985,q.t*q.spd), rr=q.rb*Math.sin(th); q.m.position.copy(ctr).addScaledVector(q.n,q.rb*Math.cos(th)); q.m.scale.setScalar(Math.max(.01,rr));
+      q.m.material.opacity=q.op*Math.max(0,1-q.t/q.life)*(th>2.9?Math.max(0,(Math.PI-th)/.24):1); }
+    else if (q.kind==='glow'){ q.m.position.copy(ctr).addScaledVector(q.n,q.rb*1.01); const k=q.t/q.life, s=q.rb*(.35+Math.min(1,q.t/3)*.75)*(1+.06*Math.sin(q.t*7));
+      q.m.scale.set(s,s,1); q.m.material.opacity=.75*Math.min(1,q.t*1.5)*(1-k*k); }
+    else { q.m.position.copy(ctr).addScaledVector(q.n,q.rb*1.05); const k=q.t/q.life, s=q.rb*(1.1+k*3.5); q.m.scale.set(s,s,1); q.m.material.opacity=.9*Math.max(0,1-k)*Math.max(0,1-k); }
+  }
 }
 function startCrash(a,b){
   if (crashSim) return;
@@ -2390,8 +3396,9 @@ function startCrash(a,b){
   const rb=bodyRadius(big), rs=bodyRadius(small), P=pb.clone().addScaledVector(n,rb*.95);
   const shells=[0xffc080,0x9fd8ff].map((col,i) => { const m=new THREE.Mesh(new THREE.SphereGeometry(1,40,24),new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide})); m.position.copy(P); m.visible=false; scene.add(m); return m; });
   crashSim={a,b,big,small,n,P,rb,rs,t:0,booms:[0,0,0],shells};
-  makeDebris(P,n,big,small,rb,rs);
-  spawnBoom(P,rb*2.2);
+  makeDebris(P,n,big,small,rb,rs); addQuake(big,n,rb);
+  if (small.isMoon && small.mx!==undefined) crashSim.m0=[small.mx,small.mz];
+  spawnBoom(P,rb*.9);
   simScale=.25;
   sheet.classList.add('closed'); renderPanel();
   $('#crashBar').hidden=false; $('#crashTitle').textContent=`${small.name} hits ${big.name}`;
@@ -2409,15 +3416,24 @@ function clearCrash(){
   if (crashSim){ crashSim.shells.forEach(m => { scene.remove(m); disposeTree(m); }); crashSim=null; }
   simScale=1; crashShake=0; $('#crashBar').hidden=true;
   debrisSims.forEach(d => { scene.remove(d.im); disposeTree(d.im); }); debrisSims.length=0;
+  quakeFx.forEach(q => { scene.remove(q.m); disposeTree(q.m); }); quakeFx.length=0;
 }
 function updateCrash(rdt){
+  updateQuakes(rdt);
   for (let k=debrisSims.length-1;k>=0;k--){
     const d=debrisSims[k], dd=rdt*Math.max(.45,simScale); d.t+=dd;
-    const life=24, fade=Math.max(0,Math.min(1,(life-d.t)/6));
+    const life=34, fade=Math.max(0,Math.min(1,(life-d.t)/7)), ctr=worldPos(d.big,_cp2); if (ctr) d.ctr.copy(ctr);
+    const sub=dd>.05?3:1, h=dd/sub;
     for (let i=0;i<d.N;i++){
-      d.pos[i].addScaledVector(d.vel[i],dd); d.heat[i]=Math.max(0,d.heat[i]-dd*.18);
-      _cs.setScalar(d.sc[i]*fade*(.5+.5*Math.min(1,d.t*2))); _cm.compose(d.pos[i],_cq,_cs); d.im.setMatrixAt(i,_cm);
-      _cc.copy(d.base[i]).lerp(new THREE.Color(0xff7a1a),d.heat[i]); d.im.setColorAt(i,_cc);
+      const p=d.pos[i];
+      if (!d.landed[i]){
+        for (let s2=0;s2<sub;s2++){ const r2=p.lengthSq(), r=Math.sqrt(r2); d.vel[i].addScaledVector(p,-d.GM/(r2*r)*h); p.addScaledVector(d.vel[i],h); }
+        if (p.length()<d.rb*1.003){ d.landed[i]=1; p.setLength(d.rb*1.004); d.heat[i]=Math.max(d.heat[i],.9); }   // re-entry: it lands red-hot
+        else d.heat[i]=Math.max(.05,d.heat[i]-dd*.07); d.ang[i]+=d.spin[i]*dd;
+      } else d.heat[i]=Math.max(0,d.heat[i]-dd*.045);
+      const sz=d.sc[i]*fade*(.5+.5*Math.min(1,d.t*2))*(d.landed[i]?.75:1);
+      _cs.setScalar(sz); _cq.setFromAxisAngle(d.ax[i],d.ang[i]); _cp.copy(d.ctr).add(p); _cm.compose(_cp,_cq,_cs); d.im.setMatrixAt(i,_cm);
+      const ht=d.heat[i]; _cc.copy(d.base[i]).lerp(_HOT,Math.min(1,ht*1.2)); if (ht>.8) _cc.lerp(_WHITE,(ht-.8)*3); d.im.setColorAt(i,_cc);
     }
     d.im.instanceMatrix.needsUpdate=true; d.im.instanceColor.needsUpdate=true;
     if (d.t>life){ scene.remove(d.im); disposeTree(d.im); debrisSims.splice(k,1); }
@@ -2426,27 +3442,34 @@ function updateCrash(rdt){
   const c=crashSim; c.t+=rdt;
   simScale = c.t<2.5 ? .25 : Math.min(1,.25+(c.t-2.5)*.4);
   crashShake = 0;
-  [[.0,0],[1.1,1],[2.4,2]].forEach(([at,i]) => { if (!c.booms[i] && c.t>=at && at>0){ c.booms[i]=1; const off=c.P.clone().addScaledVector(randomDir(Math.random),c.rb*.35); spawnBoom(off,c.rb*(2.6+i)); crashShake=c.rb*.03; } });
-  c.shells.forEach((m,i) => { const t=c.t-i*.8; if (t<=0){ m.visible=false; return; } m.visible=true; const r=c.rb*(.2+t*1.4); m.scale.setScalar(r); m.material.opacity=Math.max(0,.45*(1-t/4.2)); });
+  [[.0,0],[1.1,1],[2.4,2]].forEach(([at,i]) => { if (!c.booms[i] && c.t>=at && at>0){ c.booms[i]=1; const off=c.P.clone().addScaledVector(randomDir(Math.random),c.rb*.35); spawnBoom(off,c.rb*(1+i*.35)); crashShake=c.rb*.03; } });
+  c.shells.forEach((m,i) => { const t=c.t-i*.8; if (t<=0){ m.visible=false; return; } m.visible=true; const r=c.rb*(.2+t*1.4); m.scale.setScalar(r); m.material.opacity=Math.max(0,(i?.07:.16)*(1-t/4.2)); });
+  if (c.m0 && c.small.mx!==undefined){ const k=Math.min(1,c.t/3.2), e=k*k*(3-2*k), L=Math.hypot(c.m0[0],c.m0[1])||1, tgt=c.rb*.55/L; c.small.mx=c.m0[0]*(1-e+e*tgt); c.small.mz=c.m0[1]*(1-e+e*tgt); c.small.mvx=0; c.small.mvz=0; }   // the moon ploughs into the crust
   const o=crashObj(c); if (o){ const k=Math.max(.02,1-Math.max(0,c.t-.3)/3.2); o.scale.setScalar(k); }
   if (c.t>=5.2) finishCrash();
+}
+function meltWorld(p){   // the impact energy melts the whole crust: the planet becomes a magma world that cools back down later
+  let saved=0; birdsOn(p.id).forEach(bd => { bd.source='nebula'; saved++; });
+  const goal=p.molten?p.molten.goal:(p.type==='lava'?'rocky':p.type), gcol=p.molten?p.molten.color:(p.type==='lava'?PLANET_TYPES.rocky.sw[0]:p.color);
+  const lost=p.buildings.filter(b=>b.type!=='pad').length, hadCiv=!!p.civ, r0=planetRadius(p);
+  p.molten={goal,color:gcol,t:0,r:r0}; p.type='lava'; p.color='#ff6a1a'; p.habitable=false; delete p.civ; delete p.terraform;
+  p.buildings=p.buildings.filter(x=>x.type==='pad'); delete eFns[p.id];
+  return {saved,lost,hadCiv};
 }
 function moonImpact(p,m){
   if (visit){ leavePlanet(true); tab='system'; renderTabs(); }
   let saved=0; birdsOn(m.id).forEach(bd => { bd.source='nebula'; saved++; });
   p.moons=(p.moons||[]).filter(x=>x!==m); delete eFns[m.id];
   S.ships=S.ships.filter(sh => sh.from!==m.id && sh.to!==m.id);
-  let msg=`${m.name} crashed into ${p.name}!`;
-  const rd=randomDir(Math.random), rad=.42;
-  p.terra=p.terra||[]; p.terra.push({dir:[rd.x,rd.y,rd.z], amt:-.07, rad, cos:+Math.cos(rad).toFixed(5)}); delete eFns[p.id];
-  if (p.civ){
-    p.civ.pop=Math.max(3,p.civ.pop*.5); p.civ.happy=Math.max(0,(p.civ.happy||70)-35); p.civ.pollution=Math.min(100,(p.civ.pollution||0)+15);
-    const gone=p.buildings.filter(b=>b.type!=='pad' && Math.random()<.35).map(b=>b.id); p.buildings=p.buildings.filter(b=>!gone.includes(b.id));
-    msg+=` Half of the birds were lost and ${gone.length} buildings were destroyed.`;
-  }
-  if (m.civ) msg+=` The moon colony was lost.`;
+  const rd=randomDir(Math.random), rad=.55;
+  p.terra=p.terra||[]; p.terra.push({dir:[rd.x,rd.y,rd.z], amt:-.08, rad, cos:+Math.cos(rad).toFixed(5)});   // a giant impact basin stays after it cools
+  const r=meltWorld(p); saved+=r.saved;
+  let msg=`${m.name} smashed into ${p.name}! The crust melted and ${p.name} is now a molten lava world. It will cool down in about ${COOL_TIME()} seconds.`;
+  if (r.hadCiv) msg+=' Its civilization was wiped out.';
+  if (r.lost) msg+=` ${r.lost} buildings were destroyed.`;
+  if (m.civ) msg+=' The moon colony was lost.';
   if (saved) msg+=` Your ${saved} bird${saved>1?'s':''} escaped to the nebula.`;
-  logWar(`${m.name} crashed into ${p.name}.`);
+  logWar(`${m.name} crashed into ${p.name} and melted it.`);
   removePlanetObj(p.id); addPlanetObj(p);
   if (selected && (selected.id===m.id || selected.id===p.id)) selected=null; if (follow===p.id) follow=null;
   syncSpaceBirds(); save(); renderHUD(); renderPanel(); renderSel(); toast(msg, true);
@@ -2777,6 +3800,14 @@ function makeVillagers(ps){
   const flag=new THREE.InstancedMesh(new THREE.PlaneGeometry(.7,.45),new THREE.MeshStandardMaterial({color:0xffffff,side:THREE.DoubleSide,roughness:.9}),160);
   for (let i=0;i<160;i++) flag.setColorAt(i,new THREE.Color(0xffffff)); flag.count=0; flag.frustumCulled=false; ps.add(flag); visit.vill.flag=flag;
 }
+let _scGeo=null, _scMat=null;
+function scorchAt(dir,size){   // blackened craters stay on the battlefield
+  if (!visit) return; visit.scorch=visit.scorch||[];
+  if (!_scGeo){ _scGeo=new THREE.CircleGeometry(1,14); _scMat=new THREE.MeshStandardMaterial({color:0x1d1814,roughness:1,transparent:true,opacity:.78,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}); _scMat.keepAlive=true; }
+  const m=new THREE.Mesh(_scGeo,_scMat); m.receiveShadow=true; const r=groundR(visit.d,dir)+.06;
+  m.position.copy(dir).multiplyScalar(r); m.quaternion.setFromUnitVectors(_Z,dir); m.scale.setScalar(size*(.7+Math.random()*.6)); visit.scene.add(m); visit.scorch.push(m);
+  if (visit.scorch.length>90){ const o=visit.scorch.shift(); visit.scene.remove(o); }
+}
 function puffAt(dir,size,hot){
   if (!visit) return; visit.fxl=visit.fxl||[];
   const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:hot?0xffa040:0x444444,transparent:true,blending:hot?THREE.AdditiveBlending:THREE.NormalBlending,depthWrite:false,opacity:hot?1:.55}));
@@ -2931,10 +3962,12 @@ function updateVillagers(dt, time){
   for (const w of wars){ const fr=visit.fronts&&visit.fronts[w.id], A=c.nations.find(x=>x.id===w.a), B=c.nations.find(x=>x.id===w.b); if (!fr||!A||!B) continue;
     fr.shotT=(fr.shotT||0)-dt;
     if (fr.shotT<=0){ fr.shotT=Math.max(.07,.45/(1+(A.army+B.army)/15)); const fromA=Math.random()<.5, f=sideDir[fromA?A.id:B.id], t=sideDir[fromA?B.id:A.id];
-      if (f&&t){ const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:c.era<4?0xffe0a0:c.era<7?0xffd060:0x66ffee,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false})); sp.scale.set(.7,.7,1); visit.scene.add(sp); visit.shots.push({sp,f:jitterDir(f,3),t:jitterDir(t,3),k:0,dur:.35+Math.random()*.25}); } } }
+      if (f&&t){ const big=c.era>=3 && Math.random()<(w.barrage?.5:.12); const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:big?0xffa040:c.era<4?0xffe0a0:c.era<7?0xffd060:0x66ffee,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false})); sp.scale.set(big?1.1:.7,big?1.1:.7,1); visit.scene.add(sp); visit.shots.push({sp,big,f:jitterDir(f,big?6:3),t:jitterDir(t,big?5:3),k:0,dur:big?1.4+Math.random()*.5:.35+Math.random()*.25}); } }
+    fr.smokeT=(fr.smokeT||0)-dt; if (fr.smokeT<=0){ fr.smokeT=.25+Math.random()*.35; puffAt(jitterDir(fr.dir,5),3+Math.random()*3,false); }
+    if (w.barrage){ w.barrage.t-=dt; if (w.barrage.t<=0) w.barrage=null; } }
   for (let i=visit.shots.length-1;i>=0;i--){ const sh=visit.shots[i]; sh.k+=dt/sh.dur;
-    if (sh.k>=1){ puffAt(sh.t,1.8,true); if (Math.random()<.25) puffAt(sh.t,3,false); visit.scene.remove(sh.sp); sh.sp.material.dispose(); visit.shots.splice(i,1); continue; }
-    _ah.copy(sh.f).lerp(sh.t,sh.k).normalize(); sh.sp.position.copy(_ah).multiplyScalar(groundR(d,_ah)+1.1+Math.sin(Math.PI*sh.k)*(c.era<4?2.2:.8)); }
+    if (sh.k>=1){ puffAt(sh.t,sh.big?3.4:1.8,true); if (sh.big||Math.random()<.25) puffAt(sh.t,sh.big?5:3,false); if (sh.big||Math.random()<.18) scorchAt(sh.t,sh.big?1.6:.8); visit.scene.remove(sh.sp); sh.sp.material.dispose(); visit.shots.splice(i,1); continue; }
+    _ah.copy(sh.f).lerp(sh.t,sh.k).normalize(); sh.sp.position.copy(_ah).multiplyScalar(groundR(d,_ah)+1.1+Math.sin(Math.PI*sh.k)*(sh.big?7:c.era<4?2.2:.8)); }
   if (vs.ruins&&vs.ruins.length){ vs.ruins.forEach(r => { puffAt(r,5,true); puffAt(r,6,false); puffAt(r,5,false); }); vs.ruins=[]; }
   for (let i=visit.fxl.length-1;i>=0;i--){ const f=visit.fxl[i]; f.t+=dt; const k=f.t/f.life;
     if (k>=1){ visit.scene.remove(f.sp); f.sp.material.dispose(); visit.fxl.splice(i,1); continue; }
@@ -3433,11 +4466,11 @@ function buildVisit(d){
   ps.add(makeStarfield());
   const star=S.stars.find(s=>s.id===d.starId); const starCol = star ? (star.type==='hole'?'#ff9a3c':STAR_TYPES[star.type].color) : '#ffffff';
   const sunDir=new V3(1,.55,.35).normalize();
-  ps.add(new THREE.AmbientLight(0x9a94d0,.2));
-  const hemi=new THREE.HemisphereLight(0xdfe8ff,0x2a2350,.45); hemi.position.copy(sunDir); ps.add(hemi);
+  ps.add(new THREE.AmbientLight(0x9a94d0,.1));
+  const hemi=new THREE.HemisphereLight(0xdfe8ff,0x161236,.36); hemi.position.copy(sunDir); ps.add(hemi);
   const sun=new THREE.DirectionalLight(new THREE.Color(starCol).lerp(new THREE.Color(0xffffff),.65),2.2);
   sun.position.copy(sunDir).multiplyScalar(R*4); sun.target.position.set(0,0,0); ps.add(sun); ps.add(sun.target);
-  sun.castShadow=true; sun.shadow.mapSize.set(2048,2048);
+  sun.castShadow=true; { const ms=Math.min(renderer.capabilities.maxTextureSize||2048, R>70?4096:2048); sun.shadow.mapSize.set(ms,ms); }
   const sc=sun.shadow.camera; sc.left=-R*1.3; sc.right=R*1.3; sc.top=R*1.3; sc.bottom=-R*1.3; sc.near=R*1.8; sc.far=R*6.5; sc.updateProjectionMatrix();
   sun.shadow.bias=-.0006; sun.shadow.normalBias=R*.0015;
   const sunSpr=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:new THREE.Color(starCol),transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,fog:false}));
@@ -3501,6 +4534,7 @@ function buildVisit(d){
   d.buildings.forEach(b => addBuildingObj(b));
   makeVillagers(ps);
   syncWalkers();
+  visit.sunSet=null; buildCityLights();
 }
 function addBuildingObj(b, fresh){
   const d=visit.d, dir=dirOf(b), o=shadowify(makeBuilding(b.type,d,parseInt(b.id.slice(-5),36)||1));
@@ -3612,11 +4646,30 @@ function updatePlanetEconomy(dt){
 }
 let dragging=false; addEventListener('pointerdown',e=>{ if (e.target===renderer.domElement) dragging=true; }); addEventListener('pointerup',()=>{ dragging=false; }); addEventListener('pointercancel',()=>{ dragging=false; });
 const _Y=new V3(0,1,0);
+function buildCityLights(){
+  if (!visit) return; const d=visit.d, c=d.civ;
+  if (visit.lights){ visit.scene.remove(visit.lights); visit.lights.geometry.dispose(); visit.lights.material.dispose(); visit.lights=null; }
+  visit.lightKey=(c?c.era:0)+':'+d.buildings.length;
+  if (!c || c.era<4) return;
+  const pts=[], szs=[], rnd=mulberry32((d.seed||1)+404), W2={capital:70,city:42,house:5,school:4,factory:6,spaceport:10,camp:4,airbase:6,shop:4};
+  for (const b of d.buildings){ const n=W2[b.type]!==undefined?W2[b.type]:(b.civ?3:1), rad=(BUILDINGS[b.type]?BUILDINGS[b.type].foot:2)+(b.type==='capital'?9:b.type==='city'?7:2);
+    for (let k=0;k<n*(1+Math.min(2,(c.era-4)*.25));k++){ const dir=jitterDir(dirOf(b),rad*Math.sqrt(rnd())); const r=groundR(d,dir)+.35; pts.push(dir.x*r,dir.y*r,dir.z*r); szs.push(.5+rnd()*1.1); } }
+  if (!pts.length) return;
+  const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pts,3)); g.setAttribute('sz',new THREE.Float32BufferAttribute(szs,1));
+  const sunL=visit.scene.children.find(o=>o.isDirectionalLight);
+  const m=new THREE.ShaderMaterial({transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,
+    uniforms:{sun:{value:(sunL?sunL.position.clone():new V3(1,.5,.3)).normalize()},col:{value:new THREE.Color(c.era>=7?0x9fe8ff:0xffc56a)},px:{value:renderer.getPixelRatio()}},
+    vertexShader:`attribute float sz; uniform vec3 sun; uniform float px; varying float vN; void main(){ vN=dot(normalize(position),sun); vec4 mv=modelViewMatrix*vec4(position,1.0); gl_PointSize=sz*px*340.0/max(1.0,-mv.z); gl_Position=projectionMatrix*mv; }`,
+    fragmentShader:`uniform vec3 col; varying float vN; void main(){ vec2 q=gl_PointCoord-.5; float r=length(q); if (r>.5) discard; float night=1.0-smoothstep(-.22,.08,vN); float a=night*pow(1.0-r*2.0,1.6); gl_FragColor=vec4(col*a*1.6,a); }`});
+  const P=new THREE.Points(g,m); P.frustumCulled=false; visit.scene.add(P); visit.lights=P;
+}
+function updateCityLights(){ if (!visit) return; const c=visit.d.civ, key=(c?c.era:0)+':'+visit.d.buildings.length; if (key!==visit.lightKey) buildCityLights(); }
 function spinSun(a){   // keep sun + stars fixed relative to the camera, so the whole planet looks like it is turning
   const ps=visit.scene;
   if (!visit.sunSet){ visit.sunSet=ps.children.filter((o,i)=>i===0||o.isHemisphereLight||o.isDirectionalLight||(o.isSprite&&o.position.length()>1500)); }
   visit.sunSet.forEach((o,i)=>{ if (i===0 && !o.isLight && !o.isSprite){ o.rotation.y+=a; } else o.position.applyAxisAngle(_Y,a); });
   if (visit.atm) visit.atm.material.uniforms.sun.value.applyAxisAngle(_Y,a);
+  if (visit.lights) visit.lights.material.uniforms.sun.value.applyAxisAngle(_Y,a);
 }
 let spinOn=true, spinSpeed=.8; try{ spinOn=localStorage.getItem('birdverse-spin')!=='0'; }catch(e){}
 function syncSpin(){ controls.autoRotate=spinOn&&view==='planet'; controls.autoRotateSpeed=spinSpeed; const b=$('#spinBtn'); if (b){ b.textContent=spinOn?'Spin: On':'Spin: Off'; b.classList.toggle('go',spinOn); } }
@@ -4451,7 +5504,35 @@ function updateTags(){
 
 /* ================= LOOP ================= */
 let last=performance.now(), time=0, hudT=0, lbT=0, saveT=0, costT=0, selT=0;
-function resize(){ const w=innerWidth, h=innerHeight; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); }
+/* ---- post-processing: bloom makes suns, lava, explosions and city lights glow like a camera sees them ---- */
+let composer=null, rPass=null, bloomPass=null, fxOn=true, fxBroken=false, fpsWin=[], fxWarned=false;
+try{ fxOn=localStorage.getItem('birdverse-fx')!=='0'; }catch(e){}
+function initFx(){
+  if (composer || fxBroken) return;
+  if (!THREE.EffectComposer || !THREE.UnrealBloomPass || !THREE.RenderPass || !THREE.ShaderPass || !THREE.CopyShader){ fxBroken=true; return; }
+  try{
+    const RT=(renderer.capabilities.isWebGL2 && THREE.WebGLMultisampleRenderTarget) ? THREE.WebGLMultisampleRenderTarget : THREE.WebGLRenderTarget;
+    const rt=new RT(4,4,{minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter,format:THREE.RGBAFormat}); rt.texture.encoding=THREE.sRGBEncoding;
+    if (rt.samples!==undefined) rt.samples=4;
+    composer=new THREE.EffectComposer(renderer,rt);
+    rPass=new THREE.RenderPass(scene,camera); composer.addPass(rPass);
+    bloomPass=new THREE.UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),.7,.45,.95); composer.addPass(bloomPass);
+    composer.addPass(new THREE.ShaderPass(THREE.CopyShader));
+    composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(innerWidth,innerHeight);
+  }catch(e){ console.warn('fx off',e); fxBroken=true; composer=null; }
+}
+function renderFrame(sc){
+  if (fxOn && !fxBroken){ initFx(); if (composer){ try{ rPass.scene=sc; rPass.camera=camera; composer.render(); return; }catch(e){ console.warn(e); fxBroken=true; } } }
+  renderer.render(sc,camera);
+}
+function fxWatch(rdt){   // if the device can't keep up, drop the glow pass instead of stuttering
+  if (!fxOn || fxBroken || WARPS[warpI]>2) { fpsWin.length=0; return; }
+  fpsWin.push(rdt); if (fpsWin.length<180) return;
+  const avg=fpsWin.reduce((a,b)=>a+b,0)/fpsWin.length; fpsWin.length=0;
+  if (avg>1/26){ fxOn=false; syncFxBtn(); if (!fxWarned){ fxWarned=true; toast('Graphics set to High so the game stays smooth. Tap Graphics to switch back.'); } }
+}
+function syncFxBtn(){ const b=document.getElementById('fxBtn'); if (b){ b.textContent=fxOn&&!fxBroken?'Graphics: Ultra':'Graphics: High'; b.classList.toggle('go',fxOn&&!fxBroken); } }
+function resize(){ const w=innerWidth, h=innerHeight; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); if (composer){ composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(w,h); } }
 addEventListener('resize', resize); resize();
 
 let lastTick=0, tickErr=0;
@@ -4504,10 +5585,11 @@ function tick0(now){
   }
   updateCamera(rdt);
   if (view==='planet' && visit && controls.autoRotate && !dragging) spinSun(-(2*Math.PI/3600*controls.autoRotateSpeed));
+  if (view==='planet' && visit){ visit.lightT=(visit.lightT||0)-rdt; if (visit.lightT<=0){ visit.lightT=3; updateCityLights(); } }
   updateTags();
   const shk=view==='system'&&crashShake>0?new V3((Math.random()-.5)*crashShake,(Math.random()-.5)*crashShake,(Math.random()-.5)*crashShake):null;
   if (shk) camera.position.add(shk);
-  renderer.render(view==='planet'&&visit?visit.scene:scene,camera);
+  renderFrame(view==='planet'&&visit?visit.scene:scene); fxWatch(rdt);
   if (shk) camera.position.sub(shk);
   requestAnimationFrame(tick);
 }
@@ -4583,6 +5665,7 @@ $('#driftDone').onclick=()=>exitDrift();
 $('#driftSlider').oninput=e=>{ if (visit&&visit.drift){ const k=e.target.value/1000; visit.drift.k=visit.drift.target=k; } };
 $('#resetNormal').onclick=()=>confirmBox('Delete your Normal save? Your level, seeds and planets will be lost.','Delete',()=>{ clearSave('normal'); menuInfo(); toast('Normal save deleted.'); });
 $('#resetSandbox').onclick=()=>confirmBox('Delete your Sandbox save?','Delete',()=>{ clearSave('sandbox'); menuInfo(); toast('Sandbox save deleted.'); });
+$('#fxBtn').onclick=()=>{ fxOn=!fxOn; fxBroken=false; try{localStorage.setItem('birdverse-fx',fxOn?'1':'0');}catch(e){} syncFxBtn(); }; syncFxBtn();
 $('#spinBtn').onclick=()=>{ spinOn=!spinOn; try{localStorage.setItem('birdverse-spin',spinOn?'1':'0');}catch(e){} syncSpin(); };
 addEventListener('pagehide', save);
 document.addEventListener('visibilitychange', () => { if (document.hidden) save(); else { last=performance.now(); if (performance.now()-lastTick>500) requestAnimationFrame(tick); } });
