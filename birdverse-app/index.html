@@ -237,7 +237,7 @@ input[type=color]{width:34px;height:30px;border:0;background:transparent;padding
 <div class="toasts" id="toasts"></div>
 
 <div class="menu" id="menu">
-  <div style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 45 · spin, 30 bird species</div>
+  <div style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 46 · planet spin, 30 bird species</div>
   <div class="menu-inner">
     <h1 class="logo">Birdverse</h1>
     <p class="tagline">Build a star, grow planets, and help your flock farm, mine and build on them.</p>
@@ -3610,7 +3610,15 @@ function updatePlanetEconomy(dt){
     }
   }
 }
-let spinOn=true, spinSpeed=1.2; try{ spinOn=localStorage.getItem('birdverse-spin')!=='0'; }catch(e){}
+let dragging=false; addEventListener('pointerdown',e=>{ if (e.target===renderer.domElement) dragging=true; }); addEventListener('pointerup',()=>{ dragging=false; }); addEventListener('pointercancel',()=>{ dragging=false; });
+const _Y=new V3(0,1,0);
+function spinSun(a){   // keep sun + stars fixed relative to the camera, so the whole planet looks like it is turning
+  const ps=visit.scene;
+  if (!visit.sunSet){ visit.sunSet=ps.children.filter((o,i)=>i===0||o.isHemisphereLight||o.isDirectionalLight||(o.isSprite&&o.position.length()>1500)); }
+  visit.sunSet.forEach((o,i)=>{ if (i===0 && !o.isLight && !o.isSprite){ o.rotation.y+=a; } else o.position.applyAxisAngle(_Y,a); });
+  if (visit.atm) visit.atm.material.uniforms.sun.value.applyAxisAngle(_Y,a);
+}
+let spinOn=true, spinSpeed=.8; try{ spinOn=localStorage.getItem('birdverse-spin')!=='0'; }catch(e){}
 function syncSpin(){ controls.autoRotate=spinOn&&view==='planet'; controls.autoRotateSpeed=spinSpeed; const b=$('#spinBtn'); if (b){ b.textContent=spinOn?'Spin: On':'Spin: Off'; b.classList.toggle('go',spinOn); } }
 function visitPlanet(id){
   const d=getWorld(id); if (!d) return;
@@ -4495,6 +4503,7 @@ function tick0(now){
     const a=time*.05; camera.position.set(Math.sin(a)*2200,900,Math.cos(a)*2200); controls.target.set(0,0,-300);
   }
   updateCamera(rdt);
+  if (view==='planet' && visit && controls.autoRotate && !dragging) spinSun(-(2*Math.PI/3600*controls.autoRotateSpeed));
   updateTags();
   const shk=view==='system'&&crashShake>0?new V3((Math.random()-.5)*crashShake,(Math.random()-.5)*crashShake,(Math.random()-.5)*crashShake):null;
   if (shk) camera.position.add(shk);
