@@ -1421,7 +1421,7 @@ const ERA_SETS=[['hut','campfire','stones'],['mudhouse','field'],['woodhouse','f
 const MAX_POP=200;
 
 const BIRDS = [
-  {id:'abbas',   name:'Abbas',    species:'Crew leader',          c:{body:'#4f7ff0',belly:'#d6e3ff',head:'#4f7ff0',wing:'#2f58c2',beak:'#f4c24f'}, speed:30, carry:6, lvl:1, cost:0,   perk:'Leads the flock. Carries a little extra.'},
+  {id:'abbas',   name:'Abbas',    species:'Peach-faced lovebird', c:{body:'#4fae3a',belly:'#a8d048',head:'#ff6a34',wing:'#2f8f33',beak:'#f2c8a8'}, speed:30, carry:6, lvl:1, cost:0,   perk:'Leads the flock. Carries a little extra.'},
   {id:'silver',  name:'Silver',   species:'Grey-white lovebird',  c:{body:'#b9bec7',belly:'#f1f3f6',head:'#e9ecf0',wing:'#8b929e',beak:'#f0a24a'}, speed:33, carry:5, lvl:1, cost:30,  perk:'Quick and steady.'},
   {id:'pikachu', name:'Pikachu',  species:'Lutino cockatiel',     c:{body:'#fff1bd',belly:'#fffbe8',head:'#ffe36b',wing:'#f2df96',beak:'#e9b9a0',crest:'#ffd93b'}, crest:true, cheek:'#ff8a3d', speed:30, carry:7, lvl:2, cost:60, perk:'Big carrier. Hauls 7 at a time.'},
   {id:'aziz',    name:'Aziz',     species:'Green Indian ringneck',c:{body:'#4cc45a',belly:'#9be07a',head:'#45b852',wing:'#2f8f3c',beak:'#d9302c'}, longTail:true, speed:40, carry:5, lvl:3, cost:100, perk:'Fast flyer with a long tail.'},
@@ -2077,6 +2077,9 @@ function nationAt(d, dir, wantBorder){
   return wantBorder ? {n:N[bi], border:best-second<.06} : N[bi];
 }
 function newNationName(d){ const used=(d.civ.nations||[]).map(n=>n.name); for (let i=0;i<40;i++){ const nm=pickOne(NA_A)+pickOne(NA_B); if (!used.includes(nm)) return nm; } return pickOne(NA_A)+pickOne(NA_B)+' II'; }
+const SPECIES_RACE=[['lovebird',7],['cockatiel',2],['lorikeet',8],['canary',3],['budgie',0],['macaw',11],['dove',9],['robin',10],['sparrow',4],['pigeon',5],['cardinal',6]];
+function raceOfSpecies(sp){ sp=(sp||'').toLowerCase(); for (const [k,r] of SPECIES_RACE) if (sp.includes(k)) return r; return null; }
+function founderRace(d){ for (const b of birdsOn(d.id)){ const r=raceOfSpecies((BIRD[b.id]||{}).species); if (r!==null) return r; } return null; }
 function foundNation(d, o){
   o=o||{}; const c=d.civ; c.nations=c.nations||[];
   let dir=o.dir||null;
@@ -2086,6 +2089,7 @@ function foundNation(d, o){
   }
   if (!dir) return null;
   let race=o.race;
+  if (race===undefined && !c.nations.length){ const fr=founderRace(d); if (fr!==null) race=fr; }
   if (race===undefined){ const used=c.nations.map(n=>n.race), free=WILD.map((_,i)=>i).filter(i=>!used.includes(i)); race = (free.length && Math.random()<.8) ? pickOne(free) : Math.floor(Math.random()*WILD.length); }
   const n={id:uid(), name:o.name||newNationName(d), color:o.color||NATION_COLS[c.nations.length%NATION_COLS.length], race, dir:[dir.x,dir.y,dir.z], share:.7+Math.random()*.6};
   c.nations.push(n); return n;
@@ -2461,6 +2465,7 @@ function checkCollisions(){
 function updateNations(d, dt, spd){
   const c=d.civ; c.nations=c.nations||[];
   if (!c.nations.length) foundNation(d);
+  else if (!c.raceFixed){ const fr=founderRace(d); if (fr!==null){ c.raceFixed=1; if (c.nations[0].race!==fr){ c.nations[0].race=fr; if (visit && visit.id===d.id) refreshNationView(); } } }
   const want=Math.max(1,Math.min(7,1+Math.floor(c.pop/24)+(c.era>=5?1:0)));
   c.nationT=(c.nationT||0)+dt*spd;
   if (c.nations.length<want && !(c.natCap!==undefined && c.nations.length>=c.natCap) && c.nationT>25 && c.era>=1){
@@ -2668,7 +2673,7 @@ function civBuild(d){
 /* ----- wild birds (instanced so 200 of them stay fast) ----- */
 const WILD=[['#5cc85a','#fff36b','#7ed957','#3a9a42','Budgie'],['#4f9fe0','#e8f4ff','#ffffff','#2f6fb0','Blue budgie'],['#9a9aa6','#c9c9d2','#ffd93b','#77777f','Cockatiel'],
   ['#ffe03a','#fff09a','#ffe03a','#d9b81c','Canary'],['#8a6a4a','#d9c2a0','#8a6a4a','#5a4026','Sparrow'],['#7a7f8c','#a9aebb','#5b7f6a','#5c606b','Pigeon'],
-  ['#d9302c','#e8584f','#d9302c','#9a1f1c','Cardinal'],['#5cc85a','#9ae07a','#ff9a7a','#3a9a42','Lovebird'],['#3157d6','#ff8a1f','#3157d6','#2fb04a','Lorikeet'],
+  ['#d9302c','#e8584f','#d9302c','#9a1f1c','Cardinal'],['#4fae3a','#a8d048','#ff6a34','#2f8f33','Lovebird'],['#3157d6','#ff8a1f','#3157d6','#2fb04a','Lorikeet'],
   ['#f4f4fa','#ffffff','#f4f4fa','#d6d6e6','Dove'],['#6b5040','#e07a3a','#6b5040','#4a3428','Robin'],['#2fb4ff','#fff36b','#2fb4ff','#1677c9','Macaw']];
 const WILD_NAMES=['Pip','Tweety','Kiki','Nugget','Biscuit','Peaches','Sunny','Mochi','Bubbles','Ziggy','Coco','Pepper','Sky','Olive','Kiwi','Mango','Bean','Noodle','Twix','Hazel','Juniper','Pebble','Rio','Zara','Basil','Clover','Luna','Ozzy','Taco','Waffles'];
 function makeVillagers(ps){
