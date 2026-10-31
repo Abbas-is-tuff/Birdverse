@@ -244,7 +244,7 @@ input[type=color]{width:34px;height:30px;border:0;background:transparent;padding
 <div class="toasts" id="toasts"></div>
 
 <div class="menu" id="menu">
-  <div id="buildTag" style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 62 · slower evolution, PC app</div>
+  <div id="buildTag" style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 63 · spin speeds up with time warp</div>
   <div class="menu-inner">
     <h1 class="logo">Birdverse</h1>
     <p class="tagline">Build a star, grow planets, and help your flock farm, mine and build on them.</p>
@@ -5878,7 +5878,7 @@ addEventListener('resize', resize); resize();
 document.addEventListener('selectstart', e => { const t=e.target; if (!(t && t.closest && t.closest('input,textarea,[contenteditable]'))) e.preventDefault(); });
 document.addEventListener('mousedown', e => { if (e.detail>1 && !(e.target.closest&&e.target.closest('input,textarea'))) e.preventDefault(); });
 /* ---- update checker: the home-screen app and GitHub page keep an old copy, so look for a newer build and offer it ---- */
-const BUILD_NO=62;
+const BUILD_NO=63;
 function checkUpdate(manual){
   if (!/^https?:/.test(location.protocol) || /claude\.ai|claudeusercontent/.test(location.host)){ if (manual) toast('Updates come in automatically here. Close and reopen the game to get the newest one.'); return; }
   const base=location.href.split('#')[0].split('?')[0];
@@ -5908,7 +5908,7 @@ function tick(now){
 }
 function tick0(now){
   const rdt=Math.min(.1,(now-last)/1000), paused=!!S && WARPS[warpI]===0 && !crashSim, dt=paused?0:rdt*simScale; last=now; time+=dt; if (S) updateCrash(paused?0:rdt);
-  controls.autoRotate=spinOn && view==='planet' && !paused;   // pause freezes everything except your camera
+  controls.autoRotate=spinOn && view==='planet' && !paused;  controls.autoRotateSpeed=spinSpeed*Math.min(40,Math.max(1,WARPS[warpI]));   // time warp spins the world faster too   // pause freezes everything except your camera
   const sdt=dt*(crashSim?1:WARPS[warpI]), vdt=dt*Math.min(3,Math.max(1,crashSim?1:WARPS[warpI]));
   sourceObjs.asteroids.rotation.y+=dt*.03;
   sourceObjs.nebula.rotation.y+=dt*.01;
