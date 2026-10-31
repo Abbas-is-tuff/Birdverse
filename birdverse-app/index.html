@@ -244,7 +244,7 @@ input[type=color]{width:34px;height:30px;border:0;background:transparent;padding
 <div class="toasts" id="toasts"></div>
 
 <div class="menu" id="menu">
-  <div id="buildTag" style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 61 · revolutions, independence, quit button</div>
+  <div id="buildTag" style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 62 · slower evolution, PC app</div>
   <div class="menu-inner">
     <h1 class="logo">Birdverse</h1>
     <p class="tagline">Build a star, grow planets, and help your flock farm, mine and build on them.</p>
@@ -2371,6 +2371,7 @@ const ERA_POP=[0,12,30,55,90,140,140,140,140,140,140,140,140,140,140,140,140,140
 const ERA_HOME=['hut','mudhouse','woodhouse','stonehouse','brickhouse','skyscraper'].concat(Array(24).fill('arcology'));
 const ERA_SETS=[['hut','campfire','stones'],['mudhouse','field','capital'],['woodhouse','forge','camp','city'],['stonehouse','windmill','tower','park'],['brickhouse','factory','watertower','drill','purifier'],['skyscraper','powerplant','turbine','robotlab','spaceport','airbase'],['arcology','fusion'],['elevator'],[],['megaring']];
 const MAX_POP=200;
+const EVO_SPEED=.35;   // how fast civilizations move through the ages (1 = the old speed)
 
 const BIRDS = [
   {id:'abbas',   name:'Abbas',    species:'Peach-faced lovebird', c:{body:'#4fae3a',belly:'#a8d048',head:'#ff6a34',wing:'#2f8f33',beak:'#f2c8a8'}, speed:30, carry:6, lvl:1, cost:0,   perk:'Leads the flock. Carries a little extra.'},
@@ -3834,7 +3835,7 @@ function updateCivs(dt){
     if (c.pop<cap) c.pop=Math.min(cap, c.pop+dt*(g*c.pop*(1-c.pop/cap)+.03*spd));
     else c.pop=Math.max(cap, c.pop-(c.pop-cap)*.05*dt);
     if (c.era<ERAS.length-1){
-      const need=eraNeed(c.era); c.prog=Math.min(need, c.prog+dt*(1+c.pop*.05)*spd*pm.sci*(c.protest?.5:1)*(1+.06*Math.min(5,d.buildings.filter(b=>b.type==='coalmine'||b.type==='derrick'||b.type==='oilrig').length)));
+      const need=eraNeed(c.era); c.prog=Math.min(need, c.prog+dt*(1+c.pop*.05)*spd*EVO_SPEED*pm.sci*(c.protest?.5:1)*(1+.06*Math.min(5,d.buildings.filter(b=>b.type==='coalmine'||b.type==='derrick'||b.type==='oilrig').length)));
       if (c.prog>=need && c.pop>=ERA_POP[c.era+1]){ c.era++; c.prog=0; toast(`${d.name} entered the ${ERAS[c.era]}!`, true); addXP(40*c.era); if (visit && visit.id===d.id) renderPanel(); }
     }
     c.t+=dt*spd;
@@ -5877,7 +5878,7 @@ addEventListener('resize', resize); resize();
 document.addEventListener('selectstart', e => { const t=e.target; if (!(t && t.closest && t.closest('input,textarea,[contenteditable]'))) e.preventDefault(); });
 document.addEventListener('mousedown', e => { if (e.detail>1 && !(e.target.closest&&e.target.closest('input,textarea'))) e.preventDefault(); });
 /* ---- update checker: the home-screen app and GitHub page keep an old copy, so look for a newer build and offer it ---- */
-const BUILD_NO=61;
+const BUILD_NO=62;
 function checkUpdate(manual){
   if (!/^https?:/.test(location.protocol) || /claude\.ai|claudeusercontent/.test(location.host)){ if (manual) toast('Updates come in automatically here. Close and reopen the game to get the newest one.'); return; }
   const base=location.href.split('#')[0].split('?')[0];
