@@ -244,7 +244,7 @@ input[type=color]{width:34px;height:30px;border:0;background:transparent;padding
 <div class="toasts" id="toasts"></div>
 
 <div class="menu" id="menu">
-  <div id="buildTag" style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 64 · instant time buttons</div>
+  <div id="buildTag" style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 65 · explosions and supernovas</div>
   <div class="menu-inner">
     <h1 class="logo">Birdverse</h1>
     <p class="tagline">Build a star, grow planets, and help your flock farm, mine and build on them.</p>
@@ -3517,7 +3517,7 @@ function clearCrash(){
   quakeFx.forEach(q => { scene.remove(q.m); disposeTree(q.m); }); quakeFx.length=0;
 }
 function updateCrash(rdt){
-  updateQuakes(rdt);
+  updateQuakes(rdt); updateNova(rdt);
   for (let k=debrisSims.length-1;k>=0;k--){
     const d=debrisSims[k], dd=rdt*Math.max(.45,simScale); d.t+=dd;
     const life=34, fade=Math.max(0,Math.min(1,(life-d.t)/7)), ctr=worldPos(d.big,_cp2); if (ctr) d.ctr.copy(ctr);
@@ -5735,14 +5735,14 @@ function renderSel(){
     const stt=planetStatus(d), tt=tempText(d); title=d.name; sub=`${PLANET_TYPES[d.type].name} planet${stt?' · '+stt:''}${tt?' · '+tt:''} · ${birdsOn(d.id).length}/${capacity(d)} birds · ${d.buildings.length-1} buildings`;
     extraBtn=`<button class="btn teal" type="button" id="selVisit">Visit</button><button class="btn" type="button" id="selMoon">+ Moon</button><button class="btn danger" type="button" id="selCrash">Crash</button>`; }
   else if (selected.kind==='moon'){ d=getWorld(selected.id); if (!d){ selected=null; bar.hidden=true; return; } const p=parentOf(d);
-    title=d.name; sub=`Moon of ${p?p.name:'?'}${tempText(d)?' · '+tempText(d):''} · ${birdsOn(d.id).length}/${capacity(d)} birds · ${d.buildings.length-1} buildings`; canDel=false;
+    title=d.name; sub=`Moon of ${p?p.name:'?'}${tempText(d)?' · '+tempText(d):''} · ${birdsOn(d.id).length}/${capacity(d)} birds · ${d.buildings.length-1} buildings`;
     extraBtn=`<button class="btn teal" type="button" id="selVisit">Land</button><button class="btn" type="button" id="selMoonEdit">Edit moon</button><button class="btn danger" type="button" id="selCrash">Crash</button>`; }
   else if (selected.kind==='building'){ if (!visit){ selected=null; bar.hidden=true; return; } d=visit.d.buildings.find(b=>b.id===selected.id); if (!d){ selected=null; bar.hidden=true; return; }
     const B=BUILDINGS[d.type], jobs=jobsFor(visit.d), workers=Object.keys(jobs).filter(k=>jobs[k].job&&jobs[k].job.id===d.id).map(k=>BIRD[k].name);
     title=B.name; sub = B.civ ? `${ERAS[B.era]} · ${B.desc}${d.auto?' Built by the birds.':''}` : B.terra ? `${canTerraform(visit.d)?'Progress '+Math.floor(visit.d.terraform||0)+'%':'This world is already habitable'} · Workers: ${workers.length?workers.join(', '):'none'} (max ${WORKERS_PER})` : B.out ? `Each job: ${outHTML(B)} · Workers: ${workers.length?workers.join(', '):'none'} (max ${WORKERS_PER})` : B.desc;
     if (d.type==='pad') canDel=false; }
   bar.hidden=false;
-  bar.innerHTML=`<div class="grow"><h3>${esc(title)}</h3><p>${esc(sub)}</p></div>${extraBtn}${canDel?'<button class="btn danger" type="button" id="selDel">Demolish</button>':''}<button class="btn" type="button" id="selClose">Close</button>`;
+  bar.innerHTML=`<div class="grow"><h3>${esc(title)}</h3><p>${esc(sub)}</p></div>${extraBtn}${canDel?(selected.kind==='building'?'<button class="btn danger" type="button" id="selDel">Demolish</button>':'<button class="btn danger" type="button" id="selBoom">'+(selected.kind==='star'?'Supernova':'Explode')+'</button><button class="btn" type="button" id="selDel">Delete</button>'):''}<button class="btn" type="button" id="selClose">Close</button>`;
   $('#selClose').onclick=()=>{ selected=null; follow=null; renderSel(); };
   if ($('#selVisit')) $('#selVisit').onclick=()=>visitPlanet(d.id);
   if ($('#selMoveSys')) $('#selMoveSys').onclick=()=>openSysMove(d);
@@ -5772,25 +5772,84 @@ function renderSel(){
     pay(cost); const m=addMoon(d); removePlanetObj(d.id); addPlanetObj(d); save(); renderHUD(); renderPanel(); toast(`${m.name} formed! You now have ${d.moons.length} moon${d.moons.length>1?'s':''} here.`);
   };
   if (canDel) $('#selDel').onclick=()=>{
-    const kind=selected.kind;
-    if (kind==='star' && S.planets.some(p=>p.starId===d.id)){ toast('Demolish its planets first.'); return; }
-    const nm = kind==='building' ? BUILDINGS[d.type].name : d.name;
-    confirmBox(`Demolish ${nm}? You get half of its materials back.`, 'Demolish', () => {
+    const kind=selected.kind, nm = kind==='building' ? BUILDINGS[d.type].name : d.name;
+    const msg = kind==='building' ? `Demolish ${nm}? You get half of its materials back.` : kind==='star' ? `Delete ${nm} quietly, with all its planets and moons? No explosion. You get half of its materials back.` : `Delete ${nm} quietly? No explosion. You get half of its materials back.`;
+    confirmBox(msg, kind==='building'?'Demolish':'Delete', () => {
       for (const k in (d.paid||{})){ if (k!=='seeds') S.mats[k]+=Math.floor(d.paid[k]/2); }
-      if (kind==='star'){ S.stars=S.stars.filter(s=>s.id!==d.id); removeStarObj(d.id); }
-      else if (kind==='planet'){
-        birdsOn(d.id).forEach(b => b.source='nebula'); (d.moons||[]).forEach(mo => { birdsOn(mo.id).forEach(b => b.source='nebula'); delete eFns[mo.id]; });
-        S.planets=S.planets.filter(p=>p.id!==d.id); removePlanetObj(d.id); delete eFns[d.id]; syncSpaceBirds();
-      } else {
+      if (kind==='star'){ S.planets.filter(p=>p.starId===d.id).forEach(p=>removeWorld(p)); S.stars=S.stars.filter(s=>s.id!==d.id); removeStarObj(d.id); }
+      else if (kind==='planet' || kind==='moon') removeWorld(d);
+      else {
         const p=visit.d; p.buildings=p.buildings.filter(b=>b.id!==d.id); removeBuildingObj(d.id);
         const extra=birdsOn(p.id).slice(capacity(p)); extra.forEach(b => { b.source='nebula'; toast(`${BIRD[b.id].name} had no room and flew to space.`); });
         syncSpaceBirds(); syncWalkers();
       }
-      selected=null; follow=null; design=null; save(); renderHUD(); renderPanel(); toast(`${nm} was demolished.`);
+      selected=null; follow=null; design=null; save(); renderHUD(); renderPanel(); renderSel(); toast(`${nm} was ${kind==='building'?'demolished':'deleted'}.`);
     });
   };
+  if ($('#selBoom')) $('#selBoom').onclick=()=>{
+    const kind=selected.kind;
+    if (kind==='star') confirmBox(`Make ${d.name} go supernova? It will blow up and destroy every planet and moon around it, with all their birds.`, 'Supernova', () => { supernova(d); });
+    else confirmBox(`Blow up ${d.name}? All life on it will be destroyed, and the blast will melt the nearest world into lava.`, 'Explode', () => { explodeWorld(d,true); });
+  };
 }
-
+/* ---- explosions: worlds blowing apart, supernovas ---- */
+function removeWorld(d){
+  if (visit && (visit.id===d.id || (d.moons||[]).some(m=>m.id===visit.id))){ leavePlanet(true); tab='system'; renderTabs(); }
+  const ids=[d.id].concat((d.moons||[]).map(m=>m.id));
+  ids.forEach(id => { birdsOn(id).forEach(b => b.source='nebula'); delete eFns[id]; });
+  S.ships=S.ships.filter(sh => !ids.includes(sh.from) && !ids.includes(sh.to));
+  if (d.isMoon){ const p=parentOf(d); if (p){ p.moons=p.moons.filter(m=>m!==d); removePlanetObj(p.id); addPlanetObj(p); } }
+  else { S.planets=S.planets.filter(p=>p!==d); removePlanetObj(d.id); }
+  if (follow && ids.includes(follow)) follow=null; if (selected && ids.includes(selected.id)) selected=null;
+  syncSpaceBirds();
+}
+function burst(pos, r, cols, N){   // rocks flying apart from a blown-up world
+  const geo=new THREE.IcosahedronGeometry(1,0), im=new THREE.InstancedMesh(geo,new THREE.MeshBasicMaterial({color:0xffffff}),N); im.frustumCulled=false;
+  const P=[],V=[],sc=[],ht=[],base=[],ax=[],an=[],sp=[];
+  for (let i=0;i<N;i++){ const d=randomDir(Math.random); P.push(d.clone().multiplyScalar(r*.5*Math.random())); V.push(d.multiplyScalar(r*(.4+Math.random()*1.6)));
+    sc.push(Math.max(.5,r*(.02+Math.pow(Math.random(),2.5)*.16))); ht.push(.8+Math.random()*.2); const c=new THREE.Color(pickOne(cols)).multiplyScalar(.45+Math.random()*.3); base.push(c); im.setColorAt(i,c);
+    ax.push(randomDir(Math.random)); an.push(Math.random()*6); sp.push(.5+Math.random()*4); }
+  scene.add(im); debrisSims.push({im,pos:P,vel:V,sc,heat:ht,base,ax,ang:an,spin:sp,landed:new Uint8Array(N),t:0,N,GM:0,rb:-1,big:'_gone',ctr:pos.clone()});
+}
+function blastFx(pos, r){
+  spawnBoom(pos, r*2.2);
+  const fl=new THREE.Sprite(new THREE.SpriteMaterial({map:GLOW,color:0xffffff,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,fog:false})); fl.position.copy(pos); scene.add(fl);
+  const sh=new THREE.Mesh(new THREE.SphereGeometry(1,40,24),new THREE.MeshBasicMaterial({color:0xffb070,transparent:true,opacity:.3,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide})); sh.position.copy(pos); scene.add(sh);
+  novaFx.push({fl,sh,r,t:0,life:6,grow:r*5});
+}
+const novaFx=[];
+function updateNova(rdt){
+  for (let i=novaFx.length-1;i>=0;i--){ const n=novaFx[i]; n.t+=rdt; const k=n.t/n.life;
+    if (k>=1){ [n.fl,n.sh].forEach(o=>{ scene.remove(o); disposeTree(o); }); novaFx.splice(i,1); continue; }
+    const f=n.r*(1.5+k*6); n.fl.scale.set(f,f,1); if (n.fl.material) n.fl.material.opacity=Math.max(0,1-k*2.2);
+    n.sh.scale.setScalar(n.r*.6+n.grow*k); n.sh.material.opacity=.3*(1-k); }
+}
+function explodeWorld(d, meltNearest){
+  const pos=worldPos(d.id,new V3()), r=bodyRadius(d), lost=(d.civ?Math.floor(d.civ.pop):0)+(d.moons||[]).reduce((a,m)=>a+(m.civ?Math.floor(m.civ.pop):0),0);
+  // the closest other world takes the blast and melts
+  let near=null;
+  if (meltNearest && pos){ let bd=1e18; const st=d.isMoon?(parentOf(d)||{}).starId:d.starId;
+    for (const w of allWorlds()){ if (w===d || (d.moons||[]).includes(w) || (w.isMoon?(parentOf(w)||{}).starId:w.starId)!==st) continue; const wp=worldPos(w.id,new V3()); if (!wp) continue; const dd=wp.distanceTo(pos); if (dd<bd){ bd=dd; near=w; } } }
+  if (pos){ blastFx(pos, r); burst(pos, r, [d.color||'#888888','#ff6a1a','#3a2a22'], 300); (d.moons||[]).forEach(m=>{ const mp=worldPos(m.id,new V3()); if (mp){ blastFx(mp,bodyRadius(m)); burst(mp,bodyRadius(m),[m.color||'#b9b4c4','#ff6a1a'],80); } }); }
+  removeWorld(d);
+  let msg=`${d.name} exploded!${lost?` ${lost} wild birds were lost.`:''}`;
+  if (near){ meltWorld(near); if (near.isMoon){ const p=parentOf(near); if (p){ removePlanetObj(p.id); addPlanetObj(p); } } else { removePlanetObj(near.id); addPlanetObj(near); } msg+=` The blast melted ${near.name} into a lava world.`; }
+  logWar(`${d.name} exploded.`); save(); renderHUD(); renderPanel(); renderSel(); toast(msg, true);
+}
+function supernova(st){
+  const o=starObjs[st.id]; if (!o) return; const pos=o.pos.clone(), r=o.r||starRadius(st);
+  if (visit && getWorld(visit.id) && (visit.d.isMoon?(parentOf(visit.d)||{}).starId:visit.d.starId)===st.id){ leavePlanet(true); tab='system'; renderTabs(); }
+  follow=null; focusOn(pos, r*30+2500);
+  blastFx(pos, r*6); burst(pos, r*3, [STAR_TYPES[st.type].color,'#ffffff','#ffd060'], 420);
+  const shock=new THREE.Mesh(new THREE.SphereGeometry(1,48,32),new THREE.MeshBasicMaterial({color:new THREE.Color(STAR_TYPES[st.type].color),transparent:true,opacity:.35,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide})); shock.position.copy(pos); scene.add(shock);
+  const worlds=S.planets.filter(p=>p.starId===st.id), far=Math.max(800,...worlds.map(p=>planetDist(p)));
+  let t=0; novaFx.push({fl:new THREE.Object3D(),sh:shock,r:r*2,t:0,life:9,grow:far*1.25});
+  toast(`${st.name} went supernova!`, true);
+  // the blast wave reaches each planet in turn and blows it apart
+  worlds.slice().sort((a,b)=>planetDist(a)-planetDist(b)).forEach(p => { setTimeout(() => { if (S.planets.includes(p)) explodeWorld(p,false); }, 400+planetDist(p)/far*6500); });
+  setTimeout(() => { const so=starObjs[st.id]; if (so) so.g.visible=false; }, 600);
+  setTimeout(() => { S.stars=S.stars.filter(s=>s!==st); removeStarObj(st.id); selected=null; save(); renderHUD(); renderPanel(); renderSel(); logWar(`${st.name} went supernova and destroyed ${worlds.length} planet${worlds.length===1?'':'s'}.`); }, 7400);
+}
 /* ================= PICKING ================= */
 const ray=new THREE.Raycaster(), ndc=new THREE.Vector2();
 let downAt=null;
@@ -5879,7 +5938,7 @@ addEventListener('resize', resize); resize();
 document.addEventListener('selectstart', e => { const t=e.target; if (!(t && t.closest && t.closest('input,textarea,[contenteditable]'))) e.preventDefault(); });
 document.addEventListener('mousedown', e => { if (e.detail>1 && !(e.target.closest&&e.target.closest('input,textarea'))) e.preventDefault(); });
 /* ---- update checker: the home-screen app and GitHub page keep an old copy, so look for a newer build and offer it ---- */
-const BUILD_NO=64;
+const BUILD_NO=65;
 function checkUpdate(manual){
   if (!/^https?:/.test(location.protocol) || /claude\.ai|claudeusercontent/.test(location.host)){ if (manual) toast('Updates come in automatically here. Close and reopen the game to get the newest one.'); return; }
   const base=location.href.split('#')[0].split('?')[0];
