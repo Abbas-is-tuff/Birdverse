@@ -207,6 +207,7 @@ input[type=color]{width:34px;height:30px;border:0;background:transparent;padding
     <button class="iconbtn" id="tipBtn" type="button">Hide tips</button>
     <button class="iconbtn" id="musicBtn" type="button">Music: On</button>
     <button class="iconbtn" id="fxBtn" type="button">Graphics: Ultra</button>
+    <button class="iconbtn" id="questBtn" type="button">Quests</button>
     <button class="iconbtn" id="warBtn" type="button">War</button>
     <button class="iconbtn" id="lbBtn" type="button">Leaderboard</button>
     <button class="iconbtn" id="saveBtn" type="button">Save</button>
@@ -226,6 +227,8 @@ input[type=color]{width:34px;height:30px;border:0;background:transparent;padding
 <div class="warpfx" id="warpFx"></div>
 <div class="timedock" id="timeDock" aria-label="Time speed" style="display:none"></div>
 <div class="driftbar" id="crashBar" hidden><b id="crashTitle">Crash simulation</b><div class="drow"><button class="iconbtn" id="crashSkip" type="button">Skip</button></div></div>
+<div class="modal" id="questModal" hidden><div class="modal-box lb"><div class="lbhead"><h3 style="margin:0">Quests</h3><button class="lbx" id="qX" type="button" aria-label="Close">&times;</button></div><div id="qBody"></div></div></div>
+<div class="modal" id="evModal" hidden><div class="modal-box lb"><div class="lbhead"><h3 style="margin:0" id="evTitle">Event</h3></div><p id="evText" style="margin:6px 0 12px;line-height:1.45"></p><div id="evBtns" class="rowi" style="gap:8px;flex-wrap:wrap"></div></div></div>
 <div class="modal" id="sysModal" hidden><div class="modal-box lb"><div class="lbhead"><h3 style="margin:0" id="smTitle">Move system</h3><button class="lbx" id="smX" type="button" aria-label="Close">&times;</button></div><div id="smBody"></div></div></div>
 <div class="modal" id="moonModal" hidden><div class="modal-box lb"><div class="lbhead"><h3 style="margin:0" id="meTitle">Edit moon</h3><button class="lbx" id="meX" type="button" aria-label="Close">&times;</button></div><div id="meBody"></div></div></div>
 <div class="modal" id="warModal" hidden><div class="modal-box lb"><div class="lbhead"><h3 style="margin:0">War room</h3><button class="lbx" id="warX" type="button" aria-label="Close war room">&times;</button></div>
@@ -244,7 +247,7 @@ input[type=color]{width:34px;height:30px;border:0;background:transparent;padding
 <div class="toasts" id="toasts"></div>
 
 <div class="menu" id="menu">
-  <div id="buildTag" style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 65 · explosions and supernovas</div>
+  <div id="buildTag" style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 66 · quests and space events</div>
   <div class="menu-inner">
     <h1 class="logo">Birdverse</h1>
     <p class="tagline">Build a star, grow planets, and help your flock farm, mine and build on them.</p>
@@ -2951,6 +2954,7 @@ function liftBuildings(d){
     const rad=(BUILDINGS[b.type].foot+3)/surfR(d); d.terra.push({dir:b.dir.slice(), amt:+(T.sea+.025-e).toFixed(4), rad:+rad.toFixed(4), cos:+Math.cos(rad).toFixed(5)}); });
 }
 function becomeType(d, type, hab, color){
+  if (hab && !d.habitable) stat('habitable');
   d.type=type; d.habitable=!!hab; d.color=color||PLANET_TYPES[type].sw[0]; delete d.molten; d.terraform=0;
   if (hab) civInit(d); else delete d.civ;
   delete eFns[d.id]; liftBuildings(d);
@@ -3016,7 +3020,7 @@ function revolt(d){   // a huge, angry protest breaks away and starts its own na
   const reason=c.protest.reason==='pollution'?'the smog':c.protest.reason==='crowding'?'the crowding':'their leader';
   const n=foundNation(d,{dir:nd, race:old.race, name:pickOne(['Free ','New ','Republic of ','People\'s '])+old.name.replace(/^(Free |New |Republic of |People's )/,'')});
   if (!n) return; n.share=old.share*.45; old.share*=.6; n.army=(old.army||0)*.35; old.army=(old.army||0)*.7; n.rebel=true;
-  toast(`Revolution on ${d.name}! Protesters angry about ${reason} broke away from ${old.name} and founded ${n.name}.`, true);
+  stat('revolutions'); toast(`Revolution on ${d.name}! Protesters angry about ${reason} broke away from ${old.name} and founded ${n.name}.`, true);
   logWar(`A revolution on ${d.name} created ${n.name}, breaking away from ${old.name}.`);
   if (!S.noWars) declareWar(d,old,n,'the revolution');
   c.protest=null; c.happy=Math.min(100,c.happy+20);
@@ -3132,7 +3136,7 @@ function worldPos(id,out){
 const _wc=new V3();
 function launchColony(src, n){
   if (S.ships.length>=8) return;
-  const T=colonyTargets(src); if (!T.length) return;
+  const T=colonyTargets(src); if (!T.length) return; stat('colonies');
   T.sort((a,b) => ((b.habitable?1:0)-(a.habitable?1:0))+(Math.random()-.5)*.6);
   const dst=T[0], A=worldPos(src.id,new V3()), B=worldPos(dst.id,new V3()), dist=A&&B?A.distanceTo(B):600;
   S.ships.push({id:uid(), from:src.id, to:dst.id, t:0, dur:Math.max(12,Math.min(60,dist/60)), era:src.civ.era, company:n.company.name, fromName:src.name, nation:{name:n.name,color:n.color,race:n.race}});
@@ -3197,7 +3201,7 @@ function endWar(d,w,win,lose){
   [w.a,w.b].forEach(id => { const n=N.find(x=>x.id===id); if (n && !c.wars.some(x=>x.a===id||x.b===id)){ n.morale=1; n.mob=1; } });
   if (!win){ const a=N.find(n=>n.id===w.a), b=N.find(n=>n.id===w.b);
     if (a&&b){ toast(`${a.name} and ${b.name} signed a peace treaty on ${d.name}.`); logWar(`${a.name} and ${b.name} made peace on ${d.name}.`); } return; }
-  win.st.w++; lose.st.l++;
+  win.st.w++; lose.st.l++; stat('warsWon');
   const wd=new V3(win.dir[0],win.dir[1],win.dir[2]), ld=new V3(lose.dir[0],lose.dir[1],lose.dir[2]);
   if (w.fall || (N.length>2 && (lose.share<.35 || Math.random()<.35))){
     win.st.c++; win.share+=lose.share*.8; win.army=(win.army||0)+(lose.army||0)*.3;
@@ -3612,6 +3616,107 @@ function renderMoonEdit(){
   if ($('#meLand')) $('#meLand').onclick=()=>{ $('#moonModal').hidden=true; visitPlanet(m.id); toast('Build a Terraformer here and put birds to work on it.'); };
   $('#meDone').onclick=()=>{ $('#moonModal').hidden=true; };
 }
+/* ================= QUESTS ================= */
+function stat(k,n){ if (!S) return; S.stats=S.stats||{}; S.stats[k]=(S.stats[k]||0)+(n||1); questCheckSoon(); }
+const stv=k=>(S.stats||{})[k]||0;
+const habCount=()=>allWorlds().filter(w=>w.habitable).length, popAll=()=>Math.floor(allWorlds().reduce((a,w)=>a+(w.civ?w.civ.pop:0),0)), maxEra=()=>Math.max(0,...allWorlds().map(w=>w.civ?w.civ.era:0));
+const QUEST_KINDS=[
+  {k:'warsWon', t:n=>`Have a nation win ${n} war${n>1?'s':''}`, n:[1,2,3]},
+  {k:'eraUps', t:n=>`Civilizations move up ${n} age${n>1?'s':''}`, n:[1,2,4]},
+  {k:'fuel', t:n=>`Find ${n} oil field${n>1?'s or coal seams':' or coal seam'}`, n:[1,2,3]},
+  {k:'colonies', t:n=>`Birds launch ${n} colony rocket${n>1?'s':''}`, n:[1,2,3]},
+  {k:'explosions', t:()=>'Blow up a planet or moon', n:[1]},
+  {k:'crashes', t:()=>'Crash two worlds together', n:[1]},
+  {k:'habitable', t:n=>`Make ${n} new world${n>1?'s':''} habitable`, n:[1,2]},
+  {k:'events', t:n=>`Answer ${n} space event${n>1?'s':''}`, n:[2,3,5]},
+  {k:'revolutions', t:()=>'See a revolution happen', n:[1]},
+  {k:'@hab', t:n=>`Have ${n} habitable worlds at once`, n:[2,3,5], live:habCount},
+  {k:'@pop', t:n=>`Reach ${n} wild birds across the galaxy`, n:[100,250,500], live:popAll},
+  {k:'@era', t:n=>`Reach the ${ERAS[n]} on any world`, n:[3,5,7,9], live:maxEra},
+];
+function newQuest(){
+  const used=(S.quests||[]).map(q=>q.k), pool=QUEST_KINDS.filter(q=>!used.includes(q.k)), Q=pickOne(pool), lvl=Math.min(Q.n.length-1,Math.floor((S.questsDone||0)/4)), n=Q.n[Math.min(Q.n.length-1,lvl+(Math.random()<.4?1:0))];
+  const R={}, mats=pickOne([['stardust','hydrogen'],['rock','metal'],['ice','stardust'],['metal','oil'],['hydrogen','coal']]), size=1+(S.questsDone||0)*.25;
+  mats.forEach(m=>R[m]=Math.round((80+Math.random()*120)*size));
+  return {k:Q.k, n, base:Q.live?0:stv(Q.k), reward:R, xp:Math.round(60*size)};
+}
+function questProg(q){ const Q=QUEST_KINDS.find(x=>x.k===q.k); if (!Q) return 0; return Math.min(q.n, Q.live?Q.live():stv(q.k)-q.base); }
+function ensureQuests(){ S.quests=S.quests||[]; while (S.quests.length<3) S.quests.push(newQuest()); }
+let qcT=null; function questCheckSoon(){ if (qcT) return; qcT=setTimeout(()=>{ qcT=null; questBadge(); },300); }
+function questBadge(){ if (!S) return; ensureQuests(); const ready=S.quests.filter(q=>questProg(q)>=q.n).length, b=$('#questBtn'); if (!b) return;
+  b.textContent=ready?`Quests (${ready} done!)`:'Quests'; b.classList.toggle('go',ready>0);
+  S.quests.forEach(q=>{ if (questProg(q)>=q.n && !q.told){ q.told=true; toast(`Quest done: ${QUEST_KINDS.find(x=>x.k===q.k).t(q.n)}. Open Quests to claim your reward!`, true); } }); }
+function renderQuests(){
+  ensureQuests(); let h=`<p class="sm" style="margin:0 0 6px">Finish quests to earn materials and XP. ${S.questsDone||0} done so far.</p>`;
+  S.quests.forEach((q,i) => { const Q=QUEST_KINDS.find(x=>x.k===q.k), pr=questProg(q), done=pr>=q.n;
+    h+=`<div class="lbrow"><div class="grow"><p>${esc(Q.t(q.n))}</p><div style="height:8px;border-radius:5px;background:rgba(255,255,255,.12);margin:6px 0"><div style="height:8px;border-radius:5px;width:${Math.round(pr/q.n*100)}%;background:${done?'var(--feather)':'#ffc93c'}"></div></div><p class="sm">${Q.live&&q.k==='@era'?(done?'Reached':'Not yet'):`${Math.max(0,Math.floor(pr))} / ${q.n}`} · Reward: ${Object.keys(q.reward).map(k=>`${q.reward[k]} ${MATS[k].name}`).join(', ')}, ${q.xp} XP</p></div>
+      ${done?`<button class="btn primary" type="button" data-qclaim="${i}">Claim</button>`:`<button class="btn" type="button" data-qskip="${i}">Skip</button>`}</div>`; });
+  $('#qBody').innerHTML=h;
+  $('#qBody').querySelectorAll('[data-qclaim]').forEach(b=>b.onclick=()=>{ const q=S.quests[+b.dataset.qclaim]; for (const k in q.reward) S.mats[k]=(S.mats[k]||0)+q.reward[k]; addXP(q.xp); S.questsDone=(S.questsDone||0)+1; S.quests.splice(+b.dataset.qclaim,1); ensureQuests(); toast('Reward claimed!'); save(); renderHUD(); renderQuests(); questBadge(); });
+  $('#qBody').querySelectorAll('[data-qskip]').forEach(b=>b.onclick=()=>{ S.quests.splice(+b.dataset.qskip,1,newQuest()); save(); renderQuests(); });
+}
+/* ================= SPACE EVENTS: surprises with a choice ================= */
+let evT=60+Math.random()*40, evOpen=false;
+function evShow(title,text,opts){ evOpen=true; $('#evTitle').textContent=title; $('#evText').textContent=text; const B=$('#evBtns'); B.innerHTML='';
+  opts.forEach(([label,fn,cls]) => { const b=document.createElement('button'); b.className='btn '+(cls||''); b.type='button'; b.textContent=label; b.onclick=()=>{ $('#evModal').hidden=true; evOpen=false; stat('events'); try{ fn(); }catch(e){ console.warn(e); } save(); renderHUD(); renderPanel(); }; B.appendChild(b); });
+  $('#evModal').hidden=false; }
+const giveMats=(o,mult)=>{ for (const k in o){ S.mats[k]=(S.mats[k]||0)+Math.round(o[k]*(mult||1)); } };
+const canPay=o=>Object.keys(o).every(k=>(S.mats[k]||0)>=o[k]), payMats=o=>{ for (const k in o) S.mats[k]-=o[k]; };
+const costTxt=o=>Object.keys(o).map(k=>`${o[k]} ${MATS[k].name}`).join(' + ');
+function spaceEvent(){
+  const civs=allWorlds().filter(w=>w.civ && w.civ.pop>=6), worlds=S.planets.filter(p=>p.px!==undefined), L=[];
+  L.push('comet','signal','rogue'); if (civs.length) L.push('meteor','festival','plague','festival'); if (S.stars.length) L.push('flare');
+  if (BIRDS.some(b=>!S.birds.find(x=>x.id===b.id) && !(S.freeBirds||[]).find(x=>x.id===b.id))) L.push('stray');
+  if (civs.some(w=>w.civ.era>=4)) L.push('olympics');
+  const ev=pickOne(L), w=civs.length?pickOne(civs):null;
+  if (ev==='meteor'){ const cost={metal:Math.round(40+w.civ.era*10)};
+    evShow('Meteor shower!',`A swarm of space rocks is heading straight for ${w.name}. The birds there look up in fear.`,[
+      [`Build a shield (${costTxt(cost)})`,()=>{ if (!canPay(cost)){ toast('Not enough Metal! The meteors hit anyway.'); hitMeteors(w); return; } payMats(cost); w.civ.happy=Math.min(100,(w.civ.happy||70)+15); toast(`The shield held! The birds of ${w.name} cheer for you.`,true); },'primary'],
+      ['Let them hit',()=>hitMeteors(w)] ]); }
+  else if (ev==='comet'){ evShow('Golden comet!','A rare golden comet is flying past, glittering with stardust. It will only be here for a moment.',[
+      ['Send birds to catch it',()=>{ if (Math.random()<.75){ const r={stardust:300+Math.random()*400,hydrogen:100+Math.random()*200}; giveMats(r); addXP(60); toast(`Caught it! +${Math.round(r.stardust)} Stardust and +${Math.round(r.hydrogen)} Hydrogen.`,true); } else toast('Too fast! It slipped away. Better luck next time.'); },'primary'],
+      ['Just watch it go',()=>{ addXP(10); toast('What a beautiful sight. +10 XP'); }] ]); }
+  else if (ev==='signal'){ evShow('Strange signal','Your telescopes picked up a strange beeping pattern from deep space. Something out there is calling.',[
+      ['Answer it',()=>{ const r=Math.random(); if (r<.55){ giveMats({hydrogen:250,stardust:250,rock:250,metal:250,ice:250}); toast('Friendly aliens sent a gift! +250 of every material.',true); }
+        else if (r<.8){ const t=worlds.length?pickOne(worlds):null; if (t){ rogueCrash(t); } else toast('Static. Nothing else happened.'); }
+        else { addXP(150); toast('It was a lost space probe full of science! +150 XP',true); } },'primary'],
+      ['Stay quiet',()=>toast('The signal fades away...')] ]); }
+  else if (ev==='rogue'){ evShow('Rogue planet!','A wandering planet with no star is drifting through your galaxy.',[
+      ['Capture it into an orbit',()=>{ captureRogue(); },'primary'],
+      ['Mine it as it passes',()=>{ giveMats({rock:400,metal:250,ice:150}); toast('Your birds mined it as it flew by: +400 Rock, +250 Metal, +150 Ice.',true); }] ]); }
+  else if (ev==='festival'){ const cost={stardust:120,ice:60};
+    evShow('Bird festival',`The birds of ${w.name} want to throw a giant festival with music, seeds and dancing.`,[
+      [`Fund it (${costTxt(cost)})`,()=>{ if (!canPay(cost)){ toast('Not enough materials. The festival is small and quiet.'); return; } payMats(cost); w.civ.happy=100; w.civ.pop=Math.min(MAX_POP,w.civ.pop*1.15+3); if (w.civ.protest) w.civ.protest=null; addXP(40); toast(`The festival on ${w.name} was amazing! Birds are happy and more chicks hatched.`,true); },'primary'],
+      ['Not this time',()=>{ w.civ.happy=Math.max(0,(w.civ.happy||70)-10); toast(`The birds of ${w.name} are a little disappointed.`); }] ]); }
+  else if (ev==='plague'){ const cost={ice:80,stardust:60};
+    evShow('Feather flu!',`A nasty feather flu is spreading on ${w.name}. Birds are sneezing everywhere.`,[
+      [`Send medicine (${costTxt(cost)})`,()=>{ if (!canPay(cost)){ toast('Not enough materials for medicine!'); w.civ.pop=Math.max(3,w.civ.pop*.7); return; } payMats(cost); toast(`The medicine worked. ${w.name} is healthy again.`,true); addXP(30); },'primary'],
+      ['Let it pass',()=>{ w.civ.pop=Math.max(3,w.civ.pop*.65); toast(`The flu passed, but ${w.name} lost a third of its birds.`,true); }] ]); }
+  else if (ev==='flare'){ const st=pickOne(S.stars), cost={ice:100};
+    evShow('Solar flare!',`${st.name} is about to blast out a giant solar flare.`,[
+      [`Shield the planets (${costTxt(cost)})`,()=>{ if (!canPay(cost)){ toast('Not enough Ice! The flare scorched the planets.'); flareHit(st); return; } payMats(cost); toast('The ice shields soaked up the flare.'); },'primary'],
+      ['Collect its energy',()=>{ giveMats({hydrogen:350,stardust:200}); flareHit(st); toast('You collected +350 Hydrogen and +200 Stardust, but the planets got scorched.',true); }] ]); }
+  else if (ev==='stray'){ const b=pickOne(BIRDS.filter(b=>!S.birds.find(x=>x.id===b.id) && !(S.freeBirds||[]).find(x=>x.id===b.id)));
+    evShow('A lost bird!',`${b.name} the ${b.species.toLowerCase()} got lost in space and is asking to join your flock.`,[
+      [`Welcome ${b.name}!`,()=>{ S.birds.push({id:b.id,source:'nebula'}); syncSpaceBirds(); toast(`${b.name} joined your flock for free!`,true); },'primary'],
+      ['Point the way home',()=>{ addXP(50); toast(`${b.name} flew home happy. +50 XP`); }] ]); }
+  else if (ev==='olympics'){ const pl=civs.filter(c=>c.civ.era>=4), a=pickOne(pl);
+    evShow('Galactic Bird Games',`${a.name} wants to host the Galactic Bird Games. Every nation is sending its fastest flyers.`,[
+      ['Host the games',()=>{ (a.civ.nations||[]).forEach(n=>{ n.morale=1; }); a.civ.happy=Math.min(100,(a.civ.happy||70)+25); (a.civ.wars||[]).slice().forEach(w2=>endWar(a,w2,null,null)); giveMats({stardust:200}); toast(`The Games were a hit! Wars on ${a.name} stopped for the celebration.`,true); },'primary'],
+      ['Say no',()=>toast('Maybe next year.')] ]); }
+}
+function hitMeteors(w){ const rd=randomDir(Math.random), rad=.25; w.terra=w.terra||[]; w.terra.push({dir:[rd.x,rd.y,rd.z],amt:-.05,rad,cos:+Math.cos(rad).toFixed(5)}); delete eFns[w.id];
+  const gone=w.buildings.filter(b=>b.type!=='pad'&&Math.random()<.15).map(b=>b.id); w.buildings=w.buildings.filter(b=>!gone.includes(b.id)); if (w.civ) w.civ.pop=Math.max(3,w.civ.pop*.85);
+  giveMats({rock:150,metal:80}); const pos=worldPos(w.id,new V3()); if (pos) spawnBoom(pos,bodyRadius(w)*1.4);
+  if (visit && visit.id===w.id) rebuildVisit(); toast(`Meteors hit ${w.name}! ${gone.length} buildings were smashed, but the craters are full of Rock and Metal (+150 Rock, +80 Metal).`,true); }
+function flareHit(st){ allWorlds().filter(w=>(w.isMoon?(parentOf(w)||{}).starId:w.starId)===st.id && w.civ).forEach(w=>{ w.civ.happy=Math.max(0,(w.civ.happy||70)-20); w.civ.pop=Math.max(3,w.civ.pop*.92); }); }
+function rogueCrash(t){ toast(`Uh oh! The signal came from a rogue moon, and it is heading for ${t.name}!`,true); if (!t.moons) t.moons=[]; const m=addMoon(t); m.rf=.3; m.mx*=.7; m.mz*=.7; m.mvx=-m.mx*.3; m.mvz=-m.mz*.3; m.hurl=40; removePlanetObj(t.id); addPlanetObj(t); }
+function captureRogue(){
+  const st=pickOne(S.stars); if (!st){ toast('You need a star to capture it.'); return; } const types=Object.keys(PLANET_TYPES).filter(k=>!PLANET_TYPES[k].hidden), type=pickOne(types), T=PLANET_TYPES[type];
+  const used=S.planets.filter(p=>p.starId===st.id).map(p=>planetDist(p)), dist=Math.round(Math.max(600,...used.map(x=>x+500)));
+  const d={id:uid(),type,name:randName('planet'),size:.3+Math.random()*.5,color:pickOne(T.sw),starId:st.id,dist,angle:Math.random()*6.28,moons:Math.random()<.5?1:0,rings:type==='ringed',seed:Math.floor(Math.random()*1e6)};
+  ensurePad(d); S.planets.push(d); addPlanetObj(d); addXP(80); toast(`Captured! ${d.name}, a ${T.name} planet, now orbits ${st.name}.`,true);
+}
 function moonImpact(p,m){
   if (visit){ leavePlanet(true); tab='system'; renderTabs(); }
   let saved=0; birdsOn(m.id).forEach(bd => { bd.source='nebula'; saved++; });
@@ -3625,7 +3730,7 @@ function moonImpact(p,m){
   if (r.lost) msg+=` ${r.lost} buildings were destroyed.`;
   if (m.civ) msg+=' The moon colony was lost.';
   if (saved) msg+=` Your ${saved} bird${saved>1?'s':''} escaped to the nebula.`;
-  logWar(`${m.name} crashed into ${p.name} and melted it.`);
+  stat('crashes'); logWar(`${m.name} crashed into ${p.name} and melted it.`);
   removePlanetObj(p.id); addPlanetObj(p);
   if (selected && (selected.id===m.id || selected.id===p.id)) selected=null; if (follow===p.id) follow=null;
   syncSpaceBirds(); save(); renderHUD(); renderPanel(); renderSel(); toast(msg, true);
@@ -3655,7 +3760,7 @@ function collide(a,b){
   S.planets=S.planets.filter(p => p!==small); removePlanetObj(small.id); delete eFns[small.id];
   removePlanetObj(big.id); addPlanetObj(big);
   if (selected && (selected.id===small.id || selected.id===big.id)) selected=null; if (follow===small.id) follow=null;
-  logWar(`${small.name} crashed into ${big.name}.`);
+  stat('crashes'); logWar(`${small.name} crashed into ${big.name}.`);
   syncSpaceBirds(); save(); renderHUD(); renderPanel(); renderSel();
   toast(`${small.name} crashed into ${big.name}!${melted?` ${big.name} melted into a lava world.`:''}${civDied?' Its wild birds were lost.':''}${saved?` Your ${saved} bird${saved>1?'s':''} escaped to the nebula.`:''}`, true);
 }
@@ -3837,7 +3942,7 @@ function updateCivs(dt){
     else c.pop=Math.max(cap, c.pop-(c.pop-cap)*.05*dt);
     if (c.era<ERAS.length-1){
       const need=eraNeed(c.era); c.prog=Math.min(need, c.prog+dt*(1+c.pop*.05)*spd*EVO_SPEED*pm.sci*(c.protest?.5:1)*(1+.06*Math.min(5,d.buildings.filter(b=>b.type==='coalmine'||b.type==='derrick'||b.type==='oilrig').length)));
-      if (c.prog>=need && c.pop>=ERA_POP[c.era+1]){ c.era++; c.prog=0; toast(`${d.name} entered the ${ERAS[c.era]}!`, true); addXP(40*c.era); if (visit && visit.id===d.id) renderPanel(); }
+      if (c.prog>=need && c.pop>=ERA_POP[c.era+1]){ c.era++; c.prog=0; stat('eraUps'); toast(`${d.name} entered the ${ERAS[c.era]}!`, true); addXP(40*c.era); if (visit && visit.id===d.id) renderPanel(); }
     }
     c.t+=dt*spd;
     if (c.t>=7){ c.t=0; if (civStructs(d).length < Math.min(180, c.pop*.6+3)) civBuild(d); }
@@ -3893,7 +3998,7 @@ function fossils(d){
 const fosFound=(d,f)=>(d.fosFound||[]).includes(f.i);
 function fossilNear(d,dir,kind,dist,onlyFound){ const R=surfR(d); let best=null, bd=1e9; for (const f of fossils(d)){ if (kind&&f.kind!==kind) continue; if (onlyFound!==undefined && fosFound(d,f)!==onlyFound) continue; const a=angBetween(dir,f.dir)*R; if (a<dist&&a<bd){ bd=a; best=f; } } return best; }
 function discoverFossil(d,f,who){
-  if (fosFound(d,f)) return false; (d.fosFound=d.fosFound||[]).push(f.i);
+  if (fosFound(d,f)) return false; (d.fosFound=d.fosFound||[]).push(f.i); stat('fuel');
   const what=f.kind==='oil'?(f.sea?'an offshore oil field':'oil'):'a coal seam';
   toast(`${who} found ${what} on ${d.name}!`, true);
   if (visit && visit.id===d.id){ fossilFx(f); refreshFossilMarkers(); }
@@ -5834,7 +5939,7 @@ function explodeWorld(d, meltNearest){
   removeWorld(d);
   let msg=`${d.name} exploded!${lost?` ${lost} wild birds were lost.`:''}`;
   if (near){ meltWorld(near); if (near.isMoon){ const p=parentOf(near); if (p){ removePlanetObj(p.id); addPlanetObj(p); } } else { removePlanetObj(near.id); addPlanetObj(near); } msg+=` The blast melted ${near.name} into a lava world.`; }
-  logWar(`${d.name} exploded.`); save(); renderHUD(); renderPanel(); renderSel(); toast(msg, true);
+  stat('explosions'); logWar(`${d.name} exploded.`); save(); renderHUD(); renderPanel(); renderSel(); toast(msg, true);
 }
 function supernova(st){
   const o=starObjs[st.id]; if (!o) return; const pos=o.pos.clone(), r=o.r||starRadius(st);
@@ -5844,7 +5949,7 @@ function supernova(st){
   const shock=new THREE.Mesh(new THREE.SphereGeometry(1,48,32),new THREE.MeshBasicMaterial({color:new THREE.Color(STAR_TYPES[st.type].color),transparent:true,opacity:.35,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide})); shock.position.copy(pos); scene.add(shock);
   const worlds=S.planets.filter(p=>p.starId===st.id), far=Math.max(800,...worlds.map(p=>planetDist(p)));
   let t=0; novaFx.push({fl:new THREE.Object3D(),sh:shock,r:r*2,t:0,life:9,grow:far*1.25});
-  toast(`${st.name} went supernova!`, true);
+  stat('supernovas'); toast(`${st.name} went supernova!`, true);
   // the blast wave reaches each planet in turn and blows it apart
   worlds.slice().sort((a,b)=>planetDist(a)-planetDist(b)).forEach(p => { setTimeout(() => { if (S.planets.includes(p)) explodeWorld(p,false); }, 400+planetDist(p)/far*6500); });
   setTimeout(() => { const so=starObjs[st.id]; if (so) so.g.visible=false; }, 600);
@@ -5938,7 +6043,7 @@ addEventListener('resize', resize); resize();
 document.addEventListener('selectstart', e => { const t=e.target; if (!(t && t.closest && t.closest('input,textarea,[contenteditable]'))) e.preventDefault(); });
 document.addEventListener('mousedown', e => { if (e.detail>1 && !(e.target.closest&&e.target.closest('input,textarea'))) e.preventDefault(); });
 /* ---- update checker: the home-screen app and GitHub page keep an old copy, so look for a newer build and offer it ---- */
-const BUILD_NO=65;
+const BUILD_NO=66;
 function checkUpdate(manual){
   if (!/^https?:/.test(location.protocol) || /claude\.ai|claudeusercontent/.test(location.host)){ if (manual) toast('Updates come in automatically here. Close and reopen the game to get the newest one.'); return; }
   const base=location.href.split('#')[0].split('?')[0];
@@ -6009,6 +6114,7 @@ function tick0(now){
     const a=time*.05; camera.position.set(Math.sin(a)*2200,900,Math.cos(a)*2200); controls.target.set(0,0,-300);
   }
   sizeWatch(); updateCamera(rdt);
+  if (S && !paused && !evOpen && !crashSim){ evT-=rdt; if (evT<=0){ evT=80+Math.random()*70; if (S.planets.length) spaceEvent(); } }
   for (let i=sysFlocks.length-1;i>=0;i--){ const f=sysFlocks[i]; if (!f.im.parent || !f.im.parent.parent){ sysFlocks.splice(i,1); continue; } if (view==='system') f.upd(time); }
   if (view==='planet' && visit && controls.autoRotate && !dragging) spinSun(-(2*Math.PI/3600*controls.autoRotateSpeed));
   if (view==='planet' && visit){ visit.lightT=(visit.lightT||0)-rdt; if (visit.lightT<=0){ visit.lightT=3; updateCityLights(); } }
@@ -6095,6 +6201,10 @@ $('#resetSandbox').onclick=()=>confirmBox('Delete your Sandbox save?','Delete',(
 $('#fxBtn').onclick=()=>{ fxOn=!fxOn; fxBroken=false; try{localStorage.setItem('birdverse-fx',fxOn?'1':'0');}catch(e){} syncFxBtn(); }; syncFxBtn();
 $('#spinBtn').onclick=()=>{ spinOn=!spinOn; try{localStorage.setItem('birdverse-spin',spinOn?'1':'0');}catch(e){} syncSpin(); };
 $('#meX').onclick=()=>{ $('#moonModal').hidden=true; };
+$('#questBtn').onclick=()=>{ renderQuests(); $('#questModal').hidden=false; };
+$('#qX').onclick=()=>{ $('#questModal').hidden=true; };
+$('#questModal').addEventListener('pointerdown', e => { if (e.target===$('#questModal')) $('#questModal').hidden=true; });
+setInterval(()=>{ if (S) questBadge(); },3000);
 $('#smX').onclick=()=>{ $('#sysModal').hidden=true; };
 $('#sysModal').addEventListener('pointerdown', e => { if (e.target===$('#sysModal')) $('#sysModal').hidden=true; });
 $('#moonModal').addEventListener('pointerdown', e => { if (e.target===$('#moonModal')) $('#moonModal').hidden=true; });
