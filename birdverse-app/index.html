@@ -244,7 +244,7 @@ input[type=color]{width:34px;height:30px;border:0;background:transparent;padding
 <div class="toasts" id="toasts"></div>
 
 <div class="menu" id="menu">
-  <div id="buildTag" style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 60 · no text highlight on fast clicks</div>
+  <div id="buildTag" style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 61 · revolutions, independence, quit button</div>
   <div class="menu-inner">
     <h1 class="logo">Birdverse</h1>
     <p class="tagline">Build a star, grow planets, and help your flock farm, mine and build on them.</p>
@@ -253,6 +253,7 @@ input[type=color]{width:34px;height:30px;border:0;background:transparent;padding
       <button class="mode" id="playNormal" type="button"><b>Normal</b><span>Start with one bird. Build a star first, then level up to unlock planets, buildings and birds.</span><em id="normalInfo">New game</em></button>
       <button class="mode" id="playSandbox" type="button"><b>Sandbox</b><span>No levels and no seeds. Everything is open. You still need materials.</span><em id="sandboxInfo">New game</em></button>
     </div>
+    <button class="btn" id="quitGame" type="button" style="margin:10px auto 0;display:block">Quit game</button>
     <div class="how"><b style="color:var(--ink)">How to play</b>
       <ol>
         <li>Tap the Nebula, Asteroids or Comets to gather materials. Your birds gather too.</li>
@@ -2719,6 +2720,7 @@ function rollMats(srcId, n){
   return out;
 }
 function deliver(o){
+  birdWorked(o.spec.id,.5);
   const got=rollMats(o.data.source, birdCarry(o.spec));
   let n=0; for (const k in got){ S.mats[k]+=got[k]; n+=got[k]; }
   addXP(n*.5);
@@ -3007,6 +3009,18 @@ const leaderTitle = era => era<2?'Chief':era===2?'Lord':era===3?'King':era===4?'
 function pmod(d){ const p=d.civ&&d.civ.leader?d.civ.leader.party:null;
   return {party:p, prod:p==='industry'?1.4:p==='green'?.8:p==='peace'?.9:1, poll:p==='industry'?1.5:p==='green'?.5:1, clean:p==='green'?1.5:1, grow:p==='growth'?1.5:1, sci:p==='science'?1.6:1, happy:p==='peace'?15:p==='green'?8:p==='growth'?5:p==='industry'?-5:0}; }
 function civFix(c){ if (c.pollution===undefined) c.pollution=0; if (c.happy===undefined) c.happy=70; if (c.nextElection===undefined) c.nextElection=90; }
+function revolt(d){   // a huge, angry protest breaks away and starts its own nation, then fights for it
+  const c=d.civ, N=c.nations, old=N.slice().sort((a,b)=>b.share-a.share)[0]; if (!old) return;
+  const od=new V3(old.dir[0],old.dir[1],old.dir[2]), ax=new V3().crossVectors(od,randomDir(Math.random)).normalize(), nd=od.clone().applyAxisAngle(ax,.45+Math.random()*.25).normalize();
+  const reason=c.protest.reason==='pollution'?'the smog':c.protest.reason==='crowding'?'the crowding':'their leader';
+  const n=foundNation(d,{dir:nd, race:old.race, name:pickOne(['Free ','New ','Republic of ','People\'s '])+old.name.replace(/^(Free |New |Republic of |People's )/,'')});
+  if (!n) return; n.share=old.share*.45; old.share*=.6; n.army=(old.army||0)*.35; old.army=(old.army||0)*.7; n.rebel=true;
+  toast(`Revolution on ${d.name}! Protesters angry about ${reason} broke away from ${old.name} and founded ${n.name}.`, true);
+  logWar(`A revolution on ${d.name} created ${n.name}, breaking away from ${old.name}.`);
+  if (!S.noWars) declareWar(d,old,n,'the revolution');
+  c.protest=null; c.happy=Math.min(100,c.happy+20);
+  if (visit && visit.id===d.id && visit.nationView) refreshNationView();
+}
 function holdElection(d, demanded){
   const c=d.civ; c.nextElection=180;
   const keys=Object.keys(PARTIES).sort(()=>Math.random()-.5).slice(0,3);
@@ -3055,6 +3069,7 @@ function updatePolitics(d, dt, spd, cap){
     c.protest.t+=dt;
     if (c.happy>48){ toast(`The protest on ${d.name} is over.`); c.protest=null; }
     else if (c.protest.t>75 && !c.protest.demanded){ c.protest.demanded=true; toast(`Protesters on ${d.name} demand a new leader!`); holdElection(d,true); }
+    else if (c.protest.t>150 && !c.protest.revolt && c.happy<35 && c.pop>=20 && (c.nations||[]).length && !(c.natCap!==undefined && c.nations.length>=c.natCap)){ c.protest.revolt=true; revolt(d); }
   }
   c.nextElection-=dt*spd;
   if (c.nextElection<=0) holdElection(d,false);
@@ -4898,7 +4913,7 @@ function updateWalkers(dt, time){
         if (bld && BUILDINGS[bld.type].out){
           const o=visit.bObjs[bld.id];
           let sp=null; if (o){ const p=o.position.clone().add(dirOf(bld).multiplyScalar(4)).project(camera); if (p.z<1) sp={x:(p.x*.5+.5)*innerWidth,y:(-p.y*.5+.5)*innerHeight}; }
-          produce(d,bld,sp);
+          produce(d,bld,sp); birdWorked(w.spec.id,1);
         }
         w.state='toHome'; startWalk(w, jitterDir(dirOf(job.home), BUILDINGS[job.home.type].foot+.4)); w.face=dirOf(job.home);
       }
@@ -4927,7 +4942,7 @@ function updatePlanetEconomy(dt){
       const j=jobs[bid]; if (!j.job) continue;
       if (jobTimers[bid]===undefined) jobTimers[bid]=Math.random()*CYCLE;
       jobTimers[bid]+=dt*boost*sbst;
-      if (jobTimers[bid]>=CYCLE){ jobTimers[bid]-=CYCLE; produce(d,j.job,null); }
+      if (jobTimers[bid]>=CYCLE){ jobTimers[bid]-=CYCLE; produce(d,j.job,null); birdWorked(bid,1); }
     }
   }
 }
@@ -5504,6 +5519,33 @@ function whereOptions(b){
     o += `<option value="p:${p.id}"${here?' selected':''}${!here&&n>=cap?' disabled':''}>Live on ${esc(p.name)} (${n}/${cap})</option>`; });
   return o;
 }
+/* ---- independence: a tamed bird that works hard enough can found its own nation ---- */
+const FREE_WORK=300;
+function birdWorked(id,k){
+  if (!S || !BIRD[id]) return; S.work=S.work||{}; const was=S.work[id]||0; S.work[id]=was+k;
+  if (was<FREE_WORK && S.work[id]>=FREE_WORK) toast(`${BIRD[id].name} has worked so hard they can now win independence! Move them to a planet with wild birds.`, true);
+  if (S.work[id]>=FREE_WORK) tryIndependence(id);
+}
+function tryIndependence(id){
+  const b=S.birds.find(x=>x.id===id); if (!b) return false; const pid=planetOf(b.source), d=pid&&getWorld(pid);
+  if (!d || !d.civ || !d.civ.nations || !d.civ.nations.length) return false;
+  const spec=BIRD[id], race=raceOfSpecies(spec.species);
+  const n=foundNation(d,{name:`Free ${spec.name}land`, race:race===null?undefined:race, color:spec.c.head});
+  if (!n) return false;
+  n.leader=id; n.free=true; n.share=Math.max(n.share,.9);
+  S.birds=S.birds.filter(x=>x.id!==id); delete jobTimers[id];
+  (S.freeBirds=S.freeBirds||[]).push({id, world:d.id, nation:n.id});
+  logWar(`${spec.name} won independence and founded ${n.name} on ${d.name}.`);
+  toast(`${spec.name} won independence! They founded the nation of ${n.name} on ${d.name}.`, true);
+  if (visit && visit.id===d.id){ syncWalkers(); refreshNationView&&visit.nationView&&refreshNationView(); }
+  syncSpaceBirds(); save(); renderPanel(); return true;
+}
+function rejoinBird(id){
+  const f=(S.freeBirds||[]).find(x=>x.id===id); if (!f) return;
+  S.freeBirds=S.freeBirds.filter(x=>x!==f); S.work[id]=0; S.birds.push({id, source:'nebula'});
+  const d=getWorld(f.world), n=d&&d.civ&&d.civ.nations.find(x=>x.id===f.nation); if (n){ delete n.leader; }
+  syncSpaceBirds(); save(); toast(`${BIRD[id].name} came back to your flock.${n?` ${n.name} carries on without them.`:''}`); renderPanel();
+}
 function moveBird(id, src){
   const b=S.birds.find(x=>x.id===id); if (!b) return;
   const pid=planetOf(src);
@@ -5511,6 +5553,7 @@ function moveBird(id, src){
   b.source=src; delete jobTimers[id];
   syncSpaceBirds(); syncWalkers(); save();
   toast(pid ? `${BIRD[id].name} moved to ${getWorld(pid).name}` : `${BIRD[id].name} → ${SRC[src].name}`);
+  if (((S.work||{})[id]||0)>=FREE_WORK) tryIndependence(id);
 }
 function birdCard(spec, extra){
   const own=S.birds.find(x=>x.id===spec.id), boost=songBoost();
@@ -5520,7 +5563,9 @@ function renderBirds(){
   let h = `<h4>Your flock (${S.birds.length}/${BIRDS.length})</h4><div class="list">`;
   for (const spec of BIRDS){
     const b=S.birds.find(x=>x.id===spec.id), lock=!unlocked(spec.lvl);
-    if (b){ h += birdCard(spec, `<select class="where" data-where="${spec.id}" aria-label="Where ${spec.name} works">${whereOptions(b)}</select>`) + `</div>`; continue; }
+    const fr=(S.freeBirds||[]).find(x=>x.id===spec.id);
+    if (fr){ const fw=getWorld(fr.world), fn=fw&&fw.civ&&fw.civ.nations.find(x=>x.id===fr.nation); h += birdCard(spec, `<p class="sm" style="margin:4px 0 0;color:var(--feather)">Independent · leads ${esc(fn?fn.name:'a free nation')}${fw?' on '+esc(fw.name):''}</p>`) + `<button class="btn" type="button" data-rejoin="${spec.id}">Ask to rejoin</button></div>`; continue; }
+    if (b){ const wk=Math.min(FREE_WORK,Math.floor((S.work||{})[spec.id]||0)); h += birdCard(spec, `<select class="where" data-where="${spec.id}" aria-label="Where ${spec.name} works">${whereOptions(b)}</select><p class="sm" style="margin:4px 0 0">Hard work: ${wk}/${FREE_WORK}${wk>=FREE_WORK?' · ready for independence: move them to a planet with wild birds':' toward independence'}</p>`) + `</div>`; continue; }
     h += birdCard(spec);
     if (lock) h += `<button class="btn" type="button" disabled>Level ${spec.lvl}</button>`;
     else { const c=sb()?0:spec.cost; h += `<button class="btn ${c<=S.seeds?'primary':''}" type="button" data-hire="${spec.id}"${c>S.seeds?' disabled':''}>${c?`Hire · ${c}`:'Recruit'}</button>`; }
@@ -5529,6 +5574,7 @@ function renderBirds(){
   body.innerHTML = h+'</div>';
   body.querySelectorAll('[data-where]').forEach(x => x.onchange = () => { moveBird(x.dataset.where, x.value); renderBirds(); });
   body.querySelectorAll('[data-hire]').forEach(x => x.onclick = () => hire(x.dataset.hire, 'nebula'));
+  body.querySelectorAll('[data-rejoin]').forEach(x => x.onclick = () => rejoinBird(x.dataset.rejoin));
 }
 function hire(id, src){
   const spec=BIRD[id], c=sb()?0:spec.cost; if (S.seeds<c) return;
@@ -5831,7 +5877,7 @@ addEventListener('resize', resize); resize();
 document.addEventListener('selectstart', e => { const t=e.target; if (!(t && t.closest && t.closest('input,textarea,[contenteditable]'))) e.preventDefault(); });
 document.addEventListener('mousedown', e => { if (e.detail>1 && !(e.target.closest&&e.target.closest('input,textarea'))) e.preventDefault(); });
 /* ---- update checker: the home-screen app and GitHub page keep an old copy, so look for a newer build and offer it ---- */
-const BUILD_NO=60;
+const BUILD_NO=61;
 function checkUpdate(manual){
   if (!/^https?:/.test(location.protocol) || /claude\.ai|claudeusercontent/.test(location.host)){ if (manual) toast('Updates come in automatically here. Close and reopen the game to get the newest one.'); return; }
   const base=location.href.split('#')[0].split('?')[0];
@@ -5990,6 +6036,7 @@ $('#meX').onclick=()=>{ $('#moonModal').hidden=true; };
 $('#smX').onclick=()=>{ $('#sysModal').hidden=true; };
 $('#sysModal').addEventListener('pointerdown', e => { if (e.target===$('#sysModal')) $('#sysModal').hidden=true; });
 $('#moonModal').addEventListener('pointerdown', e => { if (e.target===$('#moonModal')) $('#moonModal').hidden=true; });
+$('#quitGame').onclick=()=>{ try{ save(); }catch(e){} try{ Music.stop&&Music.stop(); }catch(e){} window.close(); setTimeout(()=>toast('Your game is saved. This window can only be closed with Alt+F4 or the X button.'),400); };
 addEventListener('pagehide', save);
 document.addEventListener('visibilitychange', () => { if (document.hidden) save(); else { last=performance.now(); if (performance.now()-lastTick>500) requestAnimationFrame(tick); } });
 setInterval(()=>{ if (!document.hidden && lastTick && performance.now()-lastTick>1500){ last=performance.now(); requestAnimationFrame(tick); } },1000);
