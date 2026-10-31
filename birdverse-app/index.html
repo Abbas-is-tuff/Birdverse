@@ -244,7 +244,7 @@ input[type=color]{width:34px;height:30px;border:0;background:transparent;padding
 <div class="toasts" id="toasts"></div>
 
 <div class="menu" id="menu">
-  <div id="buildTag" style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 63 · spin speeds up with time warp</div>
+  <div id="buildTag" style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 64 · instant time buttons</div>
   <div class="menu-inner">
     <h1 class="logo">Birdverse</h1>
     <p class="tagline">Build a star, grow planets, and help your flock farm, mine and build on them.</p>
@@ -3326,7 +3326,8 @@ function updateWars(d,dt,spd){
     const free=N.filter(n=>!c.wars.some(w=>w.a===n.id||w.b===n.id));
     if (!S.noWars && free.length>=2 && c.pop>=10 && c.wars.length<Math.floor(N.length/2) && !(pm.party==='peace' && Math.random()<.85)){ const a=pickOne(free); declareWar(d,a,pickOne(free.filter(x=>x!==a))); }
   }
-  for (const w of c.wars.slice()){ let left=dt*spd; while (left>0 && c.wars.includes(w)){ const k=Math.min(left,1); stepWar(d,w,k,1); left-=k; } }
+  const stepMax=WARPS[warpI]>=25?4:1;   // bigger steps at high time warp keep the game responsive
+  for (const w of c.wars.slice()){ let left=dt*spd; while (left>0 && c.wars.includes(w)){ const k=Math.min(left,stepMax); stepWar(d,w,k,1); left-=k; } }
 }
 function annexNation(d,win,lose){
   const c=d.civ; if (!win||!lose||win===lose) return false;
@@ -5878,7 +5879,7 @@ addEventListener('resize', resize); resize();
 document.addEventListener('selectstart', e => { const t=e.target; if (!(t && t.closest && t.closest('input,textarea,[contenteditable]'))) e.preventDefault(); });
 document.addEventListener('mousedown', e => { if (e.detail>1 && !(e.target.closest&&e.target.closest('input,textarea'))) e.preventDefault(); });
 /* ---- update checker: the home-screen app and GitHub page keep an old copy, so look for a newer build and offer it ---- */
-const BUILD_NO=63;
+const BUILD_NO=64;
 function checkUpdate(manual){
   if (!/^https?:/.test(location.protocol) || /claude\.ai|claudeusercontent/.test(location.host)){ if (manual) toast('Updates come in automatically here. Close and reopen the game to get the newest one.'); return; }
   const base=location.href.split('#')[0].split('?')[0];
@@ -5996,7 +5997,8 @@ $('#zoneBtn').onclick=()=>{ S.showZone=!S.showZone; $('#zoneBtn').classList.togg
 $('#menuSaves').onclick=openSaves;
 $('#spaceBtn').onclick=()=>leavePlanet();
 function buildTimeDock(){ const dk=$('#timeDock'); dk.innerHTML='<div class="grip" id="dockGrip" title="Drag to move">&#8943;</div>'+WARPS.map((w,i)=>`<button type="button" data-w="${i}">${w===0?'&#10074;&#10074;':w+'×'}</button>`).join('');
-  dk.querySelectorAll('button').forEach(b=>b.onclick=()=>{ warpI=+b.dataset.w; syncWarp(); });
+  // react the instant a finger touches the button: at 100x the game is busy and a full 'click' can get lost
+  dk.querySelectorAll('button').forEach(b=>{ const go=e=>{ e.preventDefault(); e.stopPropagation(); if (warpI!==+b.dataset.w){ warpI=+b.dataset.w; syncWarp(); } }; b.addEventListener('pointerdown',go); b.addEventListener('touchstart',go,{passive:false}); b.onclick=e=>{ e.preventDefault(); }; });
   dk.addEventListener('contextmenu',e=>e.preventDefault());
   const place=(x,y)=>{ const r=dk.getBoundingClientRect(); x=Math.max(4,Math.min(innerWidth-r.width-4,x)); y=Math.max(4,Math.min(innerHeight-r.height-4,y)); dk.style.left=x+'px'; dk.style.top=y+'px'; dk.style.transform='none'; return [x,y]; };
   try{ const sv=JSON.parse(localStorage.getItem('birdverse-dock')||'null'); if (sv){ dk.style.display='flex'; place(sv[0],sv[1]); dk.style.display=S?'flex':'none'; } }catch(e){}
