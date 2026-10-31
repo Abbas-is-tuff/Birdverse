@@ -7,6 +7,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@500;700;800&display=swap">
 <style>
+/* no text highlighting when buttons are clicked fast (PC double-click / iPad long-press) */
+body,button,.iconbtn,.btn,.card,.chip,.sheet,.modal,.modal-box,#timeDock,#mats{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+input,textarea,select{-webkit-user-select:text;user-select:text}
+
 /* Layout: full-bleed 3D canvas (space or a planet surface); HUD floats at top, a tabbed bottom sheet (right dock on wide screens) holds the controls */
 :root{
   --void:#0b0920; --panel:rgba(27,22,66,.94); --panel-2:#2a2363; --line:#3d3585;
@@ -240,7 +244,7 @@ input[type=color]{width:34px;height:30px;border:0;background:transparent;padding
 <div class="toasts" id="toasts"></div>
 
 <div class="menu" id="menu">
-  <div id="buildTag" style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 59 · update checker</div>
+  <div id="buildTag" style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 60 · no text highlight on fast clicks</div>
   <div class="menu-inner">
     <h1 class="logo">Birdverse</h1>
     <p class="tagline">Build a star, grow planets, and help your flock farm, mine and build on them.</p>
@@ -5824,8 +5828,10 @@ function fxWatch(rdt){   // if the device can't keep up, drop the glow pass inst
 function syncFxBtn(){ const b=document.getElementById('fxBtn'); if (b){ b.textContent=fxOn&&!fxBroken?'Graphics: Ultra':'Graphics: High'; b.classList.toggle('go',fxOn&&!fxBroken); } }
 function resize(){ const w=innerWidth, h=innerHeight; renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); if (composer){ composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(w,h); } }
 addEventListener('resize', resize); resize();
+document.addEventListener('selectstart', e => { const t=e.target; if (!(t && t.closest && t.closest('input,textarea,[contenteditable]'))) e.preventDefault(); });
+document.addEventListener('mousedown', e => { if (e.detail>1 && !(e.target.closest&&e.target.closest('input,textarea'))) e.preventDefault(); });
 /* ---- update checker: the home-screen app and GitHub page keep an old copy, so look for a newer build and offer it ---- */
-const BUILD_NO=59;
+const BUILD_NO=60;
 function checkUpdate(manual){
   if (!/^https?:/.test(location.protocol) || /claude\.ai|claudeusercontent/.test(location.host)){ if (manual) toast('Updates come in automatically here. Close and reopen the game to get the newest one.'); return; }
   const base=location.href.split('#')[0].split('?')[0];
