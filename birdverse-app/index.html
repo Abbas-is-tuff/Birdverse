@@ -247,7 +247,7 @@ input[type=color]{width:34px;height:30px;border:0;background:transparent;padding
 <div class="toasts" id="toasts"></div>
 
 <div class="menu" id="menu">
-  <div id="buildTag" style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 66 · quests and space events</div>
+  <div id="buildTag" style="position:absolute;right:12px;bottom:10px;font-size:12px;opacity:.6">Build 67 · play offline</div>
   <div class="menu-inner">
     <h1 class="logo">Birdverse</h1>
     <p class="tagline">Build a star, grow planets, and help your flock farm, mine and build on them.</p>
@@ -6043,8 +6043,13 @@ addEventListener('resize', resize); resize();
 document.addEventListener('selectstart', e => { const t=e.target; if (!(t && t.closest && t.closest('input,textarea,[contenteditable]'))) e.preventDefault(); });
 document.addEventListener('mousedown', e => { if (e.detail>1 && !(e.target.closest&&e.target.closest('input,textarea'))) e.preventDefault(); });
 /* ---- update checker: the home-screen app and GitHub page keep an old copy, so look for a newer build and offer it ---- */
-const BUILD_NO=66;
+const BUILD_NO=67;
+// offline play: on the GitHub page / home-screen app, a small helper saves the game on the device
+if ('serviceWorker' in navigator && /^https?:/.test(location.protocol) && !/claude\.ai|claudeusercontent/.test(location.host)){
+  navigator.serviceWorker.register('sw.js').then(()=>{ try{ if (!localStorage.getItem('bv-offline')){ localStorage.setItem('bv-offline','1'); setTimeout(()=>toast('Birdverse is now saved on this device. You can play it offline.'),5000); } }catch(e){} }).catch(()=>{});
+}
 function checkUpdate(manual){
+  if (!navigator.onLine && manual){ toast('You are offline. Connect to the internet to check for updates.'); return; }
   if (!/^https?:/.test(location.protocol) || /claude\.ai|claudeusercontent/.test(location.host)){ if (manual) toast('Updates come in automatically here. Close and reopen the game to get the newest one.'); return; }
   const base=location.href.split('#')[0].split('?')[0];
   fetch(base+'?nocache='+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.text():'').then(t => {
